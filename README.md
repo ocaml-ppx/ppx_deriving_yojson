@@ -43,6 +43,7 @@ _deriving Yojson_ handles tuples, records, normal and polymorphic variants; buil
 The following table summarizes the correspondence between OCaml types and JSON values:
 
 | OCaml type           | JSON value | Remarks                                        |
+| -------------------- | ---------- | ---------------------------------------------- |
 | `int`, `int32`       | Integer    |                                                |
 | `int64`, `nativeint` | Integer    | Can exceed range of `float` e.g. in JavaScript |
 | `float`              | Float      |                                                |
