@@ -70,6 +70,8 @@ Variants (regular and polymorphic) are represented using arrays; the first eleme
 
 Very large `int64` and `nativeint` numbers can wrap when decoded in a runtime which only has floats, e.g. JavaScript and Lua. It is possible to specify the <code>[@encoding \`string]</code> attribute to encode them as strings.
 
+Objects are deserialized strictly; that is, all keys in the object have to correspond to fields of the record.
+
 License
 -------
 
