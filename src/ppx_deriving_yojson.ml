@@ -11,11 +11,17 @@ let raise_errorf = Ppx_deriving.raise_errorf
 let argn = Printf.sprintf "arg%d"
 
 let rec ser_expr_of_typ typ =
+  let int_encoding typ =
+    match Ppx_deriving.attr ~prefix "encoding" typ.ptyp_attributes |>
+          Ppx_deriving.Arg.(payload ~name:"Yojson" (enum ["string"; "number"])) with
+    | Some "string" -> "String"
+    | Some "number" | None -> "Intlit"
+    | _ -> assert false
+  in
   match typ with
   | [%type: int]             -> [%expr fun x -> `Int x]
-  | [%type: int32]     | [%type: Int32.t]     -> [%expr fun x -> `Intlit (Int32.to_string x)]
-  | [%type: int64]     | [%type: Int64.t]     -> [%expr fun x -> `Intlit (Int64.to_string x)]
-  | [%type: nativeint] | [%type: Nativeint.t] -> [%expr fun x -> `Intlit (Nativeint.to_string x)]
+  | [%type: int32]
+  | [%type: Int32.t]         -> [%expr fun x -> `Intlit (Int32.to_string x)]
   | [%type: float]           -> [%expr fun x -> `Float x]
   | [%type: bool]            -> [%expr fun x -> `Bool x]
   | [%type: string]          -> [%expr fun x -> `String x]
@@ -23,6 +29,10 @@ let rec ser_expr_of_typ typ =
   | [%type: char]            -> [%expr fun x -> `String ("\"" ^ (String.make 1 x) ^ "\"")]
   | [%type: [%t? typ] ref]   -> [%expr fun x -> [%e ser_expr_of_typ typ] !x]
   | [%type: [%t? typ] list]  -> [%expr fun x -> `List (List.map [%e ser_expr_of_typ typ] x)]
+  | [%type: int64] | [%type: Int64.t] ->
+    [%expr fun x -> [%e Exp.variant (int_encoding typ) (Some [%expr (Int64.to_string x)])]]
+  | [%type: nativeint] | [%type: Nativeint.t] ->
+    [%expr fun x -> [%e Exp.variant (int_encoding typ) (Some [%expr (Nativeint.to_string x)])]]
   | [%type: [%t? typ] array] ->
     [%expr fun x -> `List (Array.to_list (Array.map [%e ser_expr_of_typ typ] x))]
   | [%type: [%t? typ] option] ->

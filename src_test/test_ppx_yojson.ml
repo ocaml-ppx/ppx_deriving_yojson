@@ -15,6 +15,8 @@ type i4 = int64       [@@deriving Show, Yojson]
 type i5 = Int64.t     [@@deriving Show, Yojson]
 type i6 = nativeint   [@@deriving Show, Yojson]
 type i7 = Nativeint.t [@@deriving Show, Yojson]
+type i8 = int64       [@encoding `string] [@@deriving Show, Yojson]
+type i9 = nativeint   [@encoding `string] [@@deriving Show, Yojson]
 type f  = float       [@@deriving Show, Yojson]
 type b  = bool        [@@deriving Show, Yojson]
 type s  = string      [@@deriving Show, Yojson]
@@ -49,7 +51,11 @@ let test_int ctxt =
   assert_roundtrip show_i6 i6_to_yojson i6_of_yojson
                    42n "42";
   assert_roundtrip show_i7 i7_to_yojson i7_of_yojson
-                   42n "42"
+                   42n "42";
+  assert_roundtrip show_i8 i8_to_yojson i8_of_yojson
+                   42L "\"42\"";
+  assert_roundtrip show_i9 i9_to_yojson i9_of_yojson
+                   42n "\"42\""
 
 let test_float ctxt =
   assert_roundtrip show_f f_to_yojson f_of_yojson
