@@ -66,7 +66,7 @@ Variants (regular and polymorphic) are represented using arrays; the first eleme
 [["A"],["B",42],["C",42,"foo"]]
 ```
 
-Very large `int64` and `nativeint` numbers can wrap when decoded in a runtime which only has floats, e.g. JavaScript and Lua. It is possible to specify the `[@encoding \`string]` attribute to encode them as strings.
+Very large `int64` and `nativeint` numbers can wrap when decoded in a runtime which only has floats, e.g. JavaScript and Lua. It is possible to specify the <code>[@encoding \`string]</code> attribute to encode them as strings.
 
 License
 -------
