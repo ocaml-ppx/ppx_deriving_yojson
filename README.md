@@ -51,9 +51,9 @@ The following table summarizes the correspondence between OCaml types and JSON v
 | `string`, `bytes`    | String     |                                                |
 | `char`               | String     | Strictly one character in length               |
 | `list`, `array`      | Array      |                                                |
-| `ref`                | N/A        |                                                |
+| `ref`                | 'a         |                                                |
 | `option`             | Null or 'a |                                                |
-| records              | Object     |                                                |
+| A record             | Object     |                                                |
 
 Variants (regular and polymorphic) are represented using arrays; the first element is a string with the name of the constructor, the rest are the arguments. Note that the implicit tuple in a polymorphic variant is flattened. For example:
 
