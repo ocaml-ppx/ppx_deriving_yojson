@@ -42,17 +42,17 @@ _deriving Yojson_ handles tuples, records, normal and polymorphic variants; buil
 
 The following table summarizes the correspondence between OCaml types and JSON values:
 
-| OCaml type             | JSON value | Remarks                                        |
-| ---------------------- | ---------- | ---------------------------------------------- |
-| `int`, `int32`, `float`| Number     |                                                |
-| `int64`, `nativeint`   | Number     | Can exceed range of `float` e.g. in JavaScript |
-| `bool`                 | Boolean    |                                                |
-| `string`, `bytes`      | String     |                                                |
-| `char`                 | String     | Strictly one character in length               |
-| `list`, `array`        | Array      |                                                |
-| `ref`                  | 'a         |                                                |
-| `option`               | Null or 'a |                                                |
-| A record               | Object     |                                                |
+| OCaml type             | JSON value | Remarks                          |
+| ---------------------- | ---------- | -------------------------------- |
+| `int`, `int32`, `float`| Number     |                                  |
+| `int64`, `nativeint`   | Number     | Can exceed range of `float`      |
+| `bool`                 | Boolean    |                                  |
+| `string`, `bytes`      | String     |                                  |
+| `char`                 | String     | Strictly one character in length |
+| `list`, `array`        | Array      |                                  |
+| `ref`                  | 'a         |                                  |
+| `option`               | Null or 'a |                                  |
+| A record               | Object     |                                  |
 
 Variants (regular and polymorphic) are represented using arrays; the first element is a string with the name of the constructor, the rest are the arguments. Note that the implicit tuple in a polymorphic variant is flattened. For example:
 
@@ -65,6 +65,8 @@ Variants (regular and polymorphic) are represented using arrays; the first eleme
 # print_endline (Yojson.Safe.to_string (pvs_to_yojson [`A; `B 42; `C (42, "foo")]));;
 [["A"],["B",42],["C",42,"foo"]]
 ```
+
+Very large `int64` and `nativeint` numbers can wrap when decoded in a runtime which only has floats, e.g. JavaScript and Lua. It is possible to specify the `[@encoding \`string]` attribute to encode them as strings.
 
 License
 -------
