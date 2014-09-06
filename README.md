@@ -35,6 +35,37 @@ _deriving Yojson_ generates two functions per type:
 
 When the deserializing function returns <code>\`Error loc</code>, `loc` points to the point in the JSON hierarchy where the error has occurred.
 
+Semantics
+---------
+
+_deriving Yojson_ handles tuples, records, normal and polymorphic variants; builtin types: `int`, `int32`, `int64`, `nativeint`, `float`, `bool`, `char`, `string`, `bytes`, `ref`, `list`, `array`, `option` and their `Mod.t` aliases.
+
+The following table summarizes the correspondence between OCaml types and JSON values:
+
+| OCaml type           | JSON value | Remarks                                        |
+| `int`, `int32`       | Integer    |                                                |
+| `int64`, `nativeint` | Integer    | Can exceed range of `float` e.g. in JavaScript |
+| `float`              | Float      |                                                |
+| `bool`               | Boolean    |                                                |
+| `string`, `bytes`    | String     |                                                |
+| `char`               | String     | Strictly one character in length               |
+| `list`, `array`      | Array      |                                                |
+| `ref`                | N/A        |                                                |
+| `option`             | Null or 'a |                                                |
+| records              | Object     |                                                |
+
+Variants (regular and polymorphic) are represented using arrays; the first element is a string with the name of the constructor, the rest are the arguments. Note that the implicit tuple in a polymorphic variant is flattened. For example:
+
+``` ocaml
+# type pvs = [ `A | `B of int | `C of int * string ] list [@@deriving Yojson];;
+# type v = A | B of int | C of int * string [@@deriving Yojson];;
+# type vs = v list [@@deriving Yojson];;
+# print_endline (Yojson.Safe.to_string (vs_to_yojson [A; B 42; C (42, "foo")]));;
+[["A"],["B",42],["C",42,"foo"]]
+# print_endline (Yojson.Safe.to_string (pvs_to_yojson [`A; `B 42; `C (42, "foo")]));;
+[["A"],["B",42],["C",42,"foo"]]
+```
+
 License
 -------
 

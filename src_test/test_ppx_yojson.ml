@@ -25,11 +25,15 @@ type xa = int array   [@@deriving Show, Yojson]
 type xr = int ref     [@@deriving Show, Yojson]
 type xt = int * int   [@@deriving Show, Yojson]
 
-type 'a p  = 'a option          [@@deriving Show, Yojson]
-type    pv = [ `A | `B of int ] [@@deriving Show, Yojson]
+type 'a p = 'a option
+[@@deriving Show, Yojson]
+type pv = [ `A | `B of int | `C of int * string ]
+[@@deriving Show, Yojson]
 
-type    v  = A | B of int * string   [@@deriving Show, Yojson]
-type    r  = { x : int; y : string } [@@deriving Show, Yojson]
+type v  = A | B of int * string
+[@@deriving Show, Yojson]
+type r  = { x : int; y : string }
+[@@deriving Show, Yojson]
 
 let test_int ctxt =
   assert_roundtrip show_i1 i1_to_yojson i1_of_yojson
@@ -93,7 +97,9 @@ let test_pvar ctxt =
   assert_roundtrip show_pv pv_to_yojson pv_of_yojson
                    `A "[\"A\"]";
   assert_roundtrip show_pv pv_to_yojson pv_of_yojson
-                   (`B 42) "[\"B\", 42]"
+                   (`B 42) "[\"B\", 42]";
+  assert_roundtrip show_pv pv_to_yojson pv_of_yojson
+                   (`C (42, "foo")) "[\"C\", 42, \"foo\"]"
 
 let test_var ctxt =
   assert_roundtrip show_v v_to_yojson v_of_yojson

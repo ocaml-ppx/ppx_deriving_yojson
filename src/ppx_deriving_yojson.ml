@@ -13,8 +13,8 @@ let argn = Printf.sprintf "arg%d"
 let rec ser_expr_of_typ typ =
   match typ with
   | [%type: int]             -> [%expr fun x -> `Int x]
-  | [%type: int32] | [%type: Int32.t]         -> [%expr fun x -> `Intlit (Int32.to_string x)]
-  | [%type: int64] | [%type: Int64.t]         -> [%expr fun x -> `Intlit (Int64.to_string x)]
+  | [%type: int32]     | [%type: Int32.t]     -> [%expr fun x -> `Intlit (Int32.to_string x)]
+  | [%type: int64]     | [%type: Int64.t]     -> [%expr fun x -> `Intlit (Int64.to_string x)]
   | [%type: nativeint] | [%type: Nativeint.t] -> [%expr fun x -> `Intlit (Nativeint.to_string x)]
   | [%type: float]           -> [%expr fun x -> `Float x]
   | [%type: bool]            -> [%expr fun x -> `Bool x]
@@ -28,7 +28,7 @@ let rec ser_expr_of_typ typ =
   | [%type: [%t? typ] option] ->
     [%expr function None -> `Null | Some x -> [%e ser_expr_of_typ typ] x]
   | { ptyp_desc = Ptyp_constr ({ txt = lid }, args) } ->
-    app (Exp.ident (mknoloc (Ppx_deriving.mangle_lid (`Prefix "to_yojson") lid)))
+    app (Exp.ident (mknoloc (Ppx_deriving.mangle_lid (`Suffix "to_yojson") lid)))
         (List.map ser_expr_of_typ args)
   | { ptyp_desc = Ptyp_tuple typs } ->
     [%expr fun [%p ptuple (List.mapi (fun i _ -> pvar (argn i)) typs)] ->
@@ -41,6 +41,11 @@ let rec ser_expr_of_typ typ =
         | Rtag (label, _, true (*empty*), []) ->
           Exp.case (Pat.variant label None)
                    [%expr `List [`String [%e str label]]]
+        | Rtag (label, _, false, [{ ptyp_desc = Ptyp_tuple typs }]) ->
+          Exp.case (Pat.variant label (Some (ptuple (List.mapi (fun i _ -> pvar (argn i)) typs))))
+                   [%expr `List ((`String [%e str label]) :: [%e
+                      list (List.mapi
+                        (fun i typ -> app (ser_expr_of_typ typ) [evar (argn i)]) typs)])]
         | Rtag (label, _, false, [typ]) ->
           Exp.case (Pat.variant label (Some [%pat? x]))
                    [%expr `List [`String [%e str label]; [%e ser_expr_of_typ typ] x]]
