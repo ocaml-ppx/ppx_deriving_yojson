@@ -27,7 +27,13 @@ In order to use _deriving Yojson_, require the syntax extension package
 Syntax
 ------
 
-TBD
+_deriving Yojson_ generates two functions per type:
+
+    type ty = ... [@@deriving Yojson]
+    val ty_of_yojson : Yojson.Safe.json -> [ `Ok of t | `Error of string ]
+    val ty_to_yojson : t -> Yojson.Safe.json
+
+When the deserializing function returns <code>`Error loc</code>, `loc` points to the point in the JSON hierarchy where the error has occurred.
 
 License
 -------
