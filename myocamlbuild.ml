@@ -4,7 +4,8 @@ let () = dispatch (
   function
   | After_rules ->
     flag ["ocaml"; "compile"; "use_yojson"] &
-      S[A"-ppx"; A("ocamlfind ppx_deriving/ppx_deriving "^
+      S[A"-ppx"; A"ocamlfind ppx_import/ppx_import";
+        A"-ppx"; A("ocamlfind ppx_deriving/ppx_deriving "^
                    "src/ppx_deriving_yojson.cma")];
 
   | _ -> ())

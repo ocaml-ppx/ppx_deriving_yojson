@@ -6,14 +6,3 @@ archive(byte, plugin) = "ppx_deriving_yojson.cma"
 archive(native) = "ppx_deriving_yojson.cmxa"
 archive(native, plugin) = "ppx_deriving_yojson.cmxs"
 exists_if = "ppx_deriving_yojson.cma"
-
-package "runtime" (
-  version = "%%VERSION%%"
-  description = "Runtime support for [@@deriving Yojson]"
-  requires = "yojson"
-  archive(byte) = "yojson_codec.cma"
-  archive(byte, plugin) = "yojson_codec.cma"
-  archive(native) = "yojson_codec.cmxa"
-  archive(native, plugin) = "yojson_codec.cmxs"
-  exists_if = "yojson_codec.cma"
-)

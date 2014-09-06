@@ -1,3 +1,4 @@
+PKG compiler-libs.common
 PKG ppx_deriving.api
 PKG ounit2
 PKG yojson

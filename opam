@@ -18,8 +18,9 @@ build-doc: [
   "make" "doc"
 ]
 depends: [
-  "ppx_deriving" {>= "0.2"}
   "yojson"
+  "ppx_deriving" {>= "0.2"}
   "ounit"        {test}
+  "ppx_import"   {test}
 ]
 
