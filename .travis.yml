@@ -4,6 +4,7 @@ script:
   - sudo apt-get update -qq
   - sudo apt-get install -qq opam ocaml-native-compilers
   - export OPAMYES=1
+  - export OPAMVAR_ocaml_native_dynlink=1 # opam/ppa bug
   - opam init
   - eval `opam config env`
   - opam pin add -n -k path ppx_deriving_yojson .
