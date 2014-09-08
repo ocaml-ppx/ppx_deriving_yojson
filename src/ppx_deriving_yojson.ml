@@ -235,9 +235,9 @@ let str_of_type ~options ~path ({ ptype_loc = loc } as type_decl) =
   in
   let polymorphize = Ppx_deriving.poly_fun_of_type_decl type_decl in
   [Vb.mk (pvar (Ppx_deriving.mangle_type_decl (`Suffix "to_yojson") type_decl))
-               (polymorphize serializer);
+               (polymorphize [%expr ([%e serializer] : _ -> Yojson.Safe.json)]);
    Vb.mk (pvar (Ppx_deriving.mangle_type_decl (`Suffix "of_yojson") type_decl))
-               (polymorphize desurializer)]
+               (polymorphize [%expr ([%e desurializer] : Yojson.Safe.json -> _)])]
 
 let sig_of_type ~options ~path type_decl =
   let typ = Ppx_deriving.core_type_of_type_decl type_decl in
