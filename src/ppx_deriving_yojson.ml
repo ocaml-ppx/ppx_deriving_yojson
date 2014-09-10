@@ -10,15 +10,23 @@ let raise_errorf = Ppx_deriving.raise_errorf
 
 let argn = Printf.sprintf "arg%d"
 
-let int_encoding typ =
+let attr_int_encoding typ =
   match Ppx_deriving.attr ~prefix "encoding" typ.ptyp_attributes |>
         Ppx_deriving.Arg.(payload ~name:"Yojson" (enum ["string"; "number"])) with
   | Some "string" -> `String
   | Some "number" | None -> `Int
   | _ -> assert false
 
+let attr_key default attrs =
+  match Ppx_deriving.attr ~prefix "key" attrs |>
+        Ppx_deriving.Arg.(payload ~name:"Yojson" string) with
+  | Some x -> x
+  | None   -> default
+
 let rec ser_expr_of_typ typ =
-  let int_encoding typ = match int_encoding typ with `String -> "String" | `Int -> "Intlit" in
+  let attr_int_encoding typ =
+    match attr_int_encoding typ with `String -> "String" | `Int -> "Intlit"
+  in
   match typ with
   | [%type: int]             -> [%expr fun x -> `Int x]
   | [%type: float]           -> [%expr fun x -> `Float x]
@@ -31,9 +39,11 @@ let rec ser_expr_of_typ typ =
   | [%type: int32] | [%type: Int32.t] ->
     [%expr fun x -> `Intlit (Int32.to_string x)]
   | [%type: int64] | [%type: Int64.t] ->
-    [%expr fun x -> [%e Exp.variant (int_encoding typ) (Some [%expr (Int64.to_string x)])]]
+    [%expr fun x -> [%e Exp.variant (attr_int_encoding typ)
+                                    (Some [%expr (Int64.to_string x)])]]
   | [%type: nativeint] | [%type: Nativeint.t] ->
-    [%expr fun x -> [%e Exp.variant (int_encoding typ) (Some [%expr (Nativeint.to_string x)])]]
+    [%expr fun x -> [%e Exp.variant (attr_int_encoding typ)
+                                    (Some [%expr (Nativeint.to_string x)])]]
   | [%type: [%t? typ] array] ->
     [%expr fun x -> `List (Array.to_list (Array.map [%e ser_expr_of_typ typ] x))]
   | [%type: [%t? typ] option] ->
@@ -102,7 +112,7 @@ and desu_expr_of_typ ~path typ =
     decode' [[%pat? `Int x],    [%expr `Ok (Int32.of_int x)];
              [%pat? `Intlit x], [%expr `Ok (Int32.of_string x)]]
   | [%type: int64] | [%type: Int64.t] ->
-    begin match int_encoding typ with
+    begin match attr_int_encoding typ with
     | `String ->
       decode [%pat? `String x] [%expr `Ok (Int64.of_string x)]
     | `Int ->
@@ -110,7 +120,7 @@ and desu_expr_of_typ ~path typ =
                [%pat? `Intlit x], [%expr `Ok (Int64.of_string x)]]
     end
   | [%type: nativeint] | [%type: Nativeint.t] ->
-    begin match int_encoding typ with
+    begin match attr_int_encoding typ with
     | `String ->
       decode [%pat? `String x] [%expr `Ok (Nativeint.of_string x)]
     | `Int ->
@@ -203,8 +213,8 @@ let str_of_type ~options ~path ({ ptype_loc = loc } as type_decl) =
     | Ptype_record labels, _ ->
       (* ser *)
       labels |>
-      List.mapi (fun i { pld_name = { txt = name }; pld_type } ->
-        [%expr [%e str name],
+      List.mapi (fun i { pld_name = { txt = name }; pld_type; pld_attributes } ->
+        [%expr [%e str (attr_key name pld_attributes)],
                [%e ser_expr_of_typ pld_type] [%e Exp.field (evar "x") (mknoloc (Lident name))]]) |>
       fun fields -> [%expr fun x -> `Assoc [%e list fields]],
       (* desu *)
@@ -219,8 +229,8 @@ let str_of_type ~options ~path ({ ptype_loc = loc } as type_decl) =
         | `Assoc xs ->
           begin try
             let [%p ptuple (List.mapi (fun i _ -> pvar (argn i)) labels)] =
-              [%e tuple (List.mapi (fun i { pld_name = { txt = name } } ->
-                    [%expr List.assoc [%e str name] xs]) labels)] in
+              [%e tuple (List.mapi (fun i { pld_name = { txt = name }; pld_attributes } ->
+                    [%expr List.assoc [%e str (attr_key name pld_attributes)] xs]) labels)] in
             if List.length xs = [%e int (List.length labels)] then
               [%e record]
             else

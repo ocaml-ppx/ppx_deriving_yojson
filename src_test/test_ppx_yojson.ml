@@ -136,6 +136,16 @@ let test_rec ctxt =
   assert_roundtrip pp_r r_to_yojson r_of_yojson
                    {x=42; y="foo"} "{\"x\":42,\"y\":\"foo\"}"
 
+type geo = {
+  lat [@key "Latitude"]  : float;
+  lon [@key "Longitude"] : float;
+}
+[@@deriving Yojson, Show]
+let test_key ctxt =
+  assert_roundtrip pp_geo geo_to_yojson geo_of_yojson
+                   {lat=35.6895; lon=139.6917}
+                   "{\"Latitude\":35.6895,\"Longitude\":139.6917}"
+
 let suite = "Test ppx_yojson" >::: [
     "test_int"    >:: test_int;
     "test_float"  >:: test_float;
@@ -151,6 +161,7 @@ let suite = "Test ppx_yojson" >::: [
     "test_pvar"   >:: test_pvar;
     "test_var"    >:: test_var;
     "test_rec"    >:: test_rec;
+    "test_key"    >:: test_key;
   ]
 
 let _ =

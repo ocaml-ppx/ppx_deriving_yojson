@@ -69,9 +69,24 @@ Variants (regular and polymorphic) are represented using arrays; the first eleme
 [["A"],["B",42],["C",42,"foo"]]
 ```
 
-Very large `int64` and `nativeint` numbers can wrap when decoded in a runtime which only has floats, e.g. JavaScript and Lua. It is possible to specify the <code>[@encoding \`string]</code> attribute to encode them as strings.
-
 Objects are deserialized strictly; that is, all keys in the object have to correspond to fields of the record.
+
+### Options
+
+#### [@key]
+
+If the JSON object keys differ from OCaml conventions, lexical or otherwise, it is possible to specify the corresponding JSON key implicitly using <code>[@key "field"]</code>, e.g.:
+
+``` ocaml
+type geo = {
+  lat [@key "Latitude"]  : float;
+  lon [@key "Longitude"] : float;
+}
+```
+
+#### [@encoding]
+
+Very large `int64` and `nativeint` numbers can wrap when decoded in a runtime which only has floats, e.g. JavaScript and Lua. It is possible to specify the <code>[@encoding \`string]</code> attribute to encode them as strings.
 
 License
 -------
