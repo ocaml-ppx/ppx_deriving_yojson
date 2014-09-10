@@ -146,6 +146,11 @@ let test_key ctxt =
                    {lat=35.6895; lon=139.6917}
                    "{\"Latitude\":35.6895,\"Longitude\":139.6917}"
 
+type id = Yojson.Safe.json [@@deriving Yojson]
+let test_id ctxt =
+  assert_roundtrip pp_json id_to_yojson id_of_yojson
+                   (`Int 42) "42"
+
 let suite = "Test ppx_yojson" >::: [
     "test_int"    >:: test_int;
     "test_float"  >:: test_float;
@@ -162,6 +167,7 @@ let suite = "Test ppx_yojson" >::: [
     "test_var"    >:: test_var;
     "test_rec"    >:: test_rec;
     "test_key"    >:: test_key;
+    "test_id"     >:: test_id;
   ]
 
 let _ =

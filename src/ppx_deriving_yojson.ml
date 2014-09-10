@@ -48,6 +48,7 @@ let rec ser_expr_of_typ typ =
     [%expr fun x -> `List (Array.to_list (Array.map [%e ser_expr_of_typ typ] x))]
   | [%type: [%t? typ] option] ->
     [%expr function None -> `Null | Some x -> [%e ser_expr_of_typ typ] x]
+  | [%type: Yojson.Safe.json] -> [%expr fun x -> x]
   | { ptyp_desc = Ptyp_constr ({ txt = lid }, args) } ->
     app (Exp.ident (mknoloc (Ppx_deriving.mangle_lid (`Suffix "to_yojson") lid)))
         (List.map ser_expr_of_typ args)
@@ -139,6 +140,7 @@ and desu_expr_of_typ ~path typ =
   | [%type: [%t? typ] array] ->
     decode [%pat? `List xs]
            [%expr map_bind [%e desu_expr_of_typ ~path typ] [] xs >|= Array.of_list]
+  | [%type: Yojson.Safe.json] -> [%expr fun x -> `Ok x]
   | { ptyp_desc = Ptyp_tuple typs } ->
     decode [%pat? `List [%p plist (List.mapi (fun i _ -> pvar (argn i)) typs)]]
            (desu_fold ~path tuple typs)

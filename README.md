@@ -56,6 +56,7 @@ The following table summarizes the correspondence between OCaml types and JSON v
 | `ref`                  | 'a         |                                  |
 | `option`               | Null or 'a |                                  |
 | A record               | Object     |                                  |
+| `Yojson.Safe.json`     | any        | Identity transformation          |
 
 Variants (regular and polymorphic) are represented using arrays; the first element is a string with the name of the constructor, the rest are the arguments. Note that the implicit tuple in a polymorphic variant is flattened. For example:
 
