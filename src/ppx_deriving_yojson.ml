@@ -17,11 +17,14 @@ let attr_int_encoding typ =
   | Some "number" | None -> `Int
   | _ -> assert false
 
-let attr_key default attrs =
-  match Ppx_deriving.attr ~prefix "key" attrs |>
+let attr_string name default attrs =
+  match Ppx_deriving.attr ~prefix name attrs |>
         Ppx_deriving.Arg.(payload ~name:"Yojson" string) with
   | Some x -> x
   | None   -> default
+
+let attr_key  = attr_string "key"
+let attr_name = attr_string "name"
 
 let rec ser_expr_of_typ typ =
   let attr_int_encoding typ =
@@ -60,17 +63,18 @@ let rec ser_expr_of_typ typ =
     let cases =
       fields |> List.map (fun field ->
         match field with
-        | Rtag (label, _, true (*empty*), []) ->
+        | Rtag (label, attrs, true (*empty*), []) ->
           Exp.case (Pat.variant label None)
-                   [%expr `List [`String [%e str label]]]
-        | Rtag (label, _, false, [{ ptyp_desc = Ptyp_tuple typs }]) ->
+                   [%expr `List [`String [%e str (attr_name label attrs)]]]
+        | Rtag (label, attrs, false, [{ ptyp_desc = Ptyp_tuple typs }]) ->
           Exp.case (Pat.variant label (Some (ptuple (List.mapi (fun i _ -> pvar (argn i)) typs))))
-                   [%expr `List ((`String [%e str label]) :: [%e
+                   [%expr `List ((`String [%e str (attr_name label attrs)]) :: [%e
                       list (List.mapi
                         (fun i typ -> app (ser_expr_of_typ typ) [evar (argn i)]) typs)])]
-        | Rtag (label, _, false, [typ]) ->
+        | Rtag (label, attrs, false, [typ]) ->
           Exp.case (Pat.variant label (Some [%pat? x]))
-                   [%expr `List [`String [%e str label]; [%e ser_expr_of_typ typ] x]]
+                   [%expr `List [`String [%e str (attr_name label attrs)];
+                                 [%e ser_expr_of_typ typ] x]]
         | Rinherit ({ ptyp_desc = Ptyp_constr (tname, []) } as typ) ->
           Exp.case [%pat? [%p Pat.type_ tname] as x]
                    [%expr [%e ser_expr_of_typ typ] x]
@@ -148,15 +152,15 @@ and desu_expr_of_typ ~path typ =
     let cases =
       List.map (fun field ->
         match field with
-        | Rtag (label, _, true (*empty*), []) ->
-          Exp.case [%pat? `List [`String [%p pstr label]]]
+        | Rtag (label, attrs, true (*empty*), []) ->
+          Exp.case [%pat? `List [`String [%p pstr (attr_name label attrs)]]]
                    [%expr `Ok [%e Exp.variant label None]]
-        | Rtag (label, _, false, [{ ptyp_desc = Ptyp_tuple typs }]) ->
-          Exp.case [%pat? `List ((`String [%p pstr label]) :: [%p
+        | Rtag (label, attrs, false, [{ ptyp_desc = Ptyp_tuple typs }]) ->
+          Exp.case [%pat? `List ((`String [%p pstr (attr_name label attrs)]) :: [%p
                       plist (List.mapi (fun i _ -> pvar (argn i)) typs)])]
                    (desu_fold ~path (fun x -> (Exp.variant label (Some (tuple x)))) typs)
-        | Rtag (label, _, false, [typ]) ->
-          Exp.case [%pat? `List [`String [%p pstr label]; x]]
+        | Rtag (label, attrs, false, [typ]) ->
+          Exp.case [%pat? `List [`String [%p pstr (attr_name label attrs)]; x]]
                    [%expr [%e desu_expr_of_typ ~path typ] x >>= fun x ->
                           `Ok [%e Exp.variant label (Some [%expr x])]]
         | Rinherit ({ ptyp_desc = Ptyp_constr (tname, []) } as typ) ->
@@ -195,18 +199,19 @@ let str_of_type ~options ~path ({ ptype_loc = loc } as type_decl) =
     | Ptype_variant constrs, _ ->
       (* ser *)
       constrs |>
-      List.map (fun { pcd_name = { txt = name' }; pcd_args } ->
+      List.map (fun { pcd_name = { txt = name' }; pcd_args; pcd_attributes } ->
         let args = List.mapi (fun i typ -> app (ser_expr_of_typ typ) [evar (argn i)]) pcd_args in
+        let json_name = attr_name name' pcd_attributes in
         let result =
           match args with
-          | []   -> [%expr `List [`String [%e str name']]]
-          | args -> [%expr `List ((`String [%e str name']) :: [%e list args])]
+          | []   -> [%expr `List [`String [%e str json_name]]]
+          | args -> [%expr `List ((`String [%e str json_name]) :: [%e list args])]
         in
         Exp.case (pconstr name' (List.mapi (fun i _ -> pvar (argn i)) pcd_args)) result) |>
       Exp.function_,
       (* desu *)
-      List.map (fun { pcd_name = { txt = name' }; pcd_args } ->
-        Exp.case [%pat? `List ((`String [%p pstr name']) ::
+      List.map (fun { pcd_name = { txt = name' }; pcd_args; pcd_attributes } ->
+        Exp.case [%pat? `List ((`String [%p pstr (attr_name name' pcd_attributes)]) ::
                           [%p plist (List.mapi (fun i _ -> pvar (argn i)) pcd_args)])]
                  (desu_fold ~path (fun x -> constr name' x) pcd_args)) constrs @
       [Exp.case [%pat? _] error] |>

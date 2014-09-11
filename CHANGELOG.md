@@ -4,7 +4,7 @@ Changelog
 0.2
 ---
 
-  * Add `[@key]` attribute.
+  * Add `[@key]` and `[@name]` attributes.
   * Add support for `Yojson.Safe.json` values.
 
 0.1

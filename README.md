@@ -83,6 +83,18 @@ type geo = {
   lat [@key "Latitude"]  : float;
   lon [@key "Longitude"] : float;
 }
+[@@deriving Yojson]
+```
+
+#### [@name]
+
+If the JSON variant names differ from OCaml conventions, it is possible to specify the corresponding JSON string explicitly using <code>[@name "constr"]</code>, e.g.:
+
+``` ocaml
+type units =
+| Metric   [@name "metric"]
+| Imperial [@name "imperial"]
+[@@deriving Yojson]
 ```
 
 #### [@encoding]

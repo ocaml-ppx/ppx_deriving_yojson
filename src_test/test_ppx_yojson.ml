@@ -151,23 +151,48 @@ let test_id ctxt =
   assert_roundtrip pp_json id_to_yojson id_of_yojson
                    (`Int 42) "42"
 
+type custvar =
+| Tea   [@name "tea"]   of string
+| Vodka [@name "vodka"]
+[@@deriving Yojson, Show]
+let test_custvar ctxt =
+  assert_roundtrip pp_custvar custvar_to_yojson custvar_of_yojson
+                   (Tea "oolong") "[\"tea\", \"oolong\"]";
+  assert_roundtrip pp_custvar custvar_to_yojson custvar_of_yojson
+                   Vodka "[\"vodka\"]"
+
+type custpvar =
+[ `Tea   [@name "tea"]   of string
+| `Beer  [@name "beer"]  of string * float
+| `Vodka [@name "vodka"]
+] [@@deriving Yojson, Show]
+let test_custpvar ctxt =
+  assert_roundtrip pp_custpvar custpvar_to_yojson custpvar_of_yojson
+                   (`Tea "earl_grey") "[\"tea\", \"earl_grey\"]";
+  assert_roundtrip pp_custpvar custpvar_to_yojson custpvar_of_yojson
+                   (`Beer ("guinness", 3.3)) "[\"beer\", \"guinness\", 3.3]";
+  assert_roundtrip pp_custpvar custpvar_to_yojson custpvar_of_yojson
+                   `Vodka "[\"vodka\"]"
+
 let suite = "Test ppx_yojson" >::: [
-    "test_int"    >:: test_int;
-    "test_float"  >:: test_float;
-    "test_bool"   >:: test_bool;
-    "test_char"   >:: test_char;
-    "test_string" >:: test_string;
-    "test_ref"    >:: test_ref;
-    "test_option" >:: test_option;
-    "test_list"   >:: test_list;
-    "test_array"  >:: test_array;
-    "test_tuple"  >:: test_tuple;
-    "test_ptyp"   >:: test_ptyp;
-    "test_pvar"   >:: test_pvar;
-    "test_var"    >:: test_var;
-    "test_rec"    >:: test_rec;
-    "test_key"    >:: test_key;
-    "test_id"     >:: test_id;
+    "test_int"      >:: test_int;
+    "test_float"    >:: test_float;
+    "test_bool"     >:: test_bool;
+    "test_char"     >:: test_char;
+    "test_string"   >:: test_string;
+    "test_ref"      >:: test_ref;
+    "test_option"   >:: test_option;
+    "test_list"     >:: test_list;
+    "test_array"    >:: test_array;
+    "test_tuple"    >:: test_tuple;
+    "test_ptyp"     >:: test_ptyp;
+    "test_pvar"     >:: test_pvar;
+    "test_var"      >:: test_var;
+    "test_rec"      >:: test_rec;
+    "test_key"      >:: test_key;
+    "test_id"       >:: test_id;
+    "test_custvar"  >:: test_custvar;
+    "test_custpvar" >:: test_custpvar;
   ]
 
 let _ =
