@@ -146,6 +146,11 @@ let test_key ctxt =
                    {lat=35.6895; lon=139.6917}
                    "{\"Latitude\":35.6895,\"Longitude\":139.6917}"
 
+let test_field_err ctxt =
+  assert_equal ~printer:(show_error_or pp_geo)
+               (`Error "Test_ppx_yojson.geo.lat")
+               (geo_of_yojson (`Assoc ["Longitude", (`Float 42.0)]))
+
 type id = Yojson.Safe.json [@@deriving Yojson]
 let test_id ctxt =
   assert_roundtrip pp_json id_to_yojson id_of_yojson
@@ -175,24 +180,25 @@ let test_custpvar ctxt =
                    `Vodka "[\"vodka\"]"
 
 let suite = "Test ppx_yojson" >::: [
-    "test_int"      >:: test_int;
-    "test_float"    >:: test_float;
-    "test_bool"     >:: test_bool;
-    "test_char"     >:: test_char;
-    "test_string"   >:: test_string;
-    "test_ref"      >:: test_ref;
-    "test_option"   >:: test_option;
-    "test_list"     >:: test_list;
-    "test_array"    >:: test_array;
-    "test_tuple"    >:: test_tuple;
-    "test_ptyp"     >:: test_ptyp;
-    "test_pvar"     >:: test_pvar;
-    "test_var"      >:: test_var;
-    "test_rec"      >:: test_rec;
-    "test_key"      >:: test_key;
-    "test_id"       >:: test_id;
-    "test_custvar"  >:: test_custvar;
-    "test_custpvar" >:: test_custpvar;
+    "test_int"       >:: test_int;
+    "test_float"     >:: test_float;
+    "test_bool"      >:: test_bool;
+    "test_char"      >:: test_char;
+    "test_string"    >:: test_string;
+    "test_ref"       >:: test_ref;
+    "test_option"    >:: test_option;
+    "test_list"      >:: test_list;
+    "test_array"     >:: test_array;
+    "test_tuple"     >:: test_tuple;
+    "test_ptyp"      >:: test_ptyp;
+    "test_pvar"      >:: test_pvar;
+    "test_var"       >:: test_var;
+    "test_rec"       >:: test_rec;
+    "test_key"       >:: test_key;
+    "test_id"        >:: test_id;
+    "test_custvar"   >:: test_custvar;
+    "test_custpvar"  >:: test_custpvar;
+    (* "test_field_err" >:: test_field_err; *)
   ]
 
 let _ =
