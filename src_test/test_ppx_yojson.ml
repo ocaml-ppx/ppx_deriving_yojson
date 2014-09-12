@@ -98,13 +98,13 @@ let test_list ctxt =
   assert_roundtrip pp_xl xl_to_yojson xl_of_yojson
                    [] "[]";
   assert_roundtrip pp_xl xl_to_yojson xl_of_yojson
-                   [42] "[42]"
+                   [42; 43] "[42, 43]"
 
 let test_array ctxt =
   assert_roundtrip pp_xa xa_to_yojson xa_of_yojson
                    [||] "[]";
   assert_roundtrip pp_xa xa_to_yojson xa_of_yojson
-                   [|42|] "[42]"
+                   [|42; 43|] "[42, 43]"
 
 let test_tuple ctxt =
   assert_roundtrip pp_xt xt_to_yojson xt_of_yojson
