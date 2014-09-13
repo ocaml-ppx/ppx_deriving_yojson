@@ -101,6 +101,17 @@ type units =
 
 Very large `int64` and `nativeint` numbers can wrap when decoded in a runtime which only has floats, e.g. JavaScript and Lua. It is possible to specify the <code>[@encoding \`string]</code> attribute to encode them as strings.
 
+#### [@default]
+
+It is possible to specify a default value for fields that can be missing from the JSON object, e.g.:
+
+``` ocaml
+type pagination = {
+  pages   : int;
+  current : int [@default 0];
+} [@@deriving Yojson]
+```
+
 License
 -------
 

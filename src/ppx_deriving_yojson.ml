@@ -10,8 +10,8 @@ let raise_errorf = Ppx_deriving.raise_errorf
 
 let argn = Printf.sprintf "arg%d"
 
-let attr_int_encoding typ =
-  match Ppx_deriving.attr ~prefix "encoding" typ.ptyp_attributes |>
+let attr_int_encoding attrs =
+  match Ppx_deriving.attr ~prefix "encoding" attrs |>
         Ppx_deriving.Arg.(payload ~name:"Yojson" (enum ["string"; "number"])) with
   | Some "string" -> `String
   | Some "number" | None -> `Int
@@ -25,6 +25,14 @@ let attr_string name default attrs =
 
 let attr_key  = attr_string "key"
 let attr_name = attr_string "name"
+
+let attr_default attrs =
+  Ppx_deriving.attr ~prefix "default" attrs |>  (* TODO vvv replace with expr *)
+  Ppx_deriving.Arg.(payload ~name:"Yojson" (fun x -> `Ok x))
+
+(* TODO remove after ppx_tools 0.99.3 *)
+let tuple l  = match l with [x] -> x | xs -> Exp.tuple xs
+let ptuple l = match l with [x] -> x | xs -> Pat.tuple xs
 
 let rec ser_expr_of_typ typ =
   let attr_int_encoding typ =
@@ -42,10 +50,10 @@ let rec ser_expr_of_typ typ =
   | [%type: int32] | [%type: Int32.t] ->
     [%expr fun x -> `Intlit (Int32.to_string x)]
   | [%type: int64] | [%type: Int64.t] ->
-    [%expr fun x -> [%e Exp.variant (attr_int_encoding typ)
+    [%expr fun x -> [%e Exp.variant (attr_int_encoding typ.ptyp_attributes)
                                     (Some [%expr (Int64.to_string x)])]]
   | [%type: nativeint] | [%type: Nativeint.t] ->
-    [%expr fun x -> [%e Exp.variant (attr_int_encoding typ)
+    [%expr fun x -> [%e Exp.variant (attr_int_encoding typ.ptyp_attributes)
                                     (Some [%expr (Nativeint.to_string x)])]]
   | [%type: [%t? typ] array] ->
     [%expr fun x -> `List (Array.to_list (Array.map [%e ser_expr_of_typ typ] x))]
@@ -117,7 +125,7 @@ and desu_expr_of_typ ~path typ =
     decode' [[%pat? `Int x],    [%expr `Ok (Int32.of_int x)];
              [%pat? `Intlit x], [%expr `Ok (Int32.of_string x)]]
   | [%type: int64] | [%type: Int64.t] ->
-    begin match attr_int_encoding typ with
+    begin match attr_int_encoding typ.ptyp_attributes with
     | `String ->
       decode [%pat? `String x] [%expr `Ok (Int64.of_string x)]
     | `Int ->
@@ -125,7 +133,7 @@ and desu_expr_of_typ ~path typ =
                [%pat? `Intlit x], [%expr `Ok (Int64.of_string x)]]
     end
   | [%type: nativeint] | [%type: Nativeint.t] ->
-    begin match attr_int_encoding typ with
+    begin match attr_int_encoding typ.ptyp_attributes with
     | `String ->
       decode [%pat? `String x] [%expr `Ok (Nativeint.of_string x)]
     | `Int ->
@@ -193,7 +201,8 @@ let str_of_type ~options ~path ({ ptype_loc = loc } as type_decl) =
        | x :: xs -> f x >>= fun x -> map_bind f (x :: acc) xs
        | [] -> `Ok (List.rev acc)
      in [%e decls]) [@ocaml.warning "-26"]] in
-  let error = [%expr `Error [%e str (String.concat "." path)]] in
+  let error path = [%expr `Error [%e str (String.concat "." path)]] in
+  let top_error = error path in
   let serializer, desurializer =
     match type_decl.ptype_kind, type_decl.ptype_manifest with
     | Ptype_abstract, Some manifest ->
@@ -216,7 +225,7 @@ let str_of_type ~options ~path ({ ptype_loc = loc } as type_decl) =
         Exp.case [%pat? `List ((`String [%p pstr (attr_name name' pcd_attributes)]) ::
                           [%p plist (List.mapi (fun i _ -> pvar (argn i)) pcd_args)])]
                  (desu_fold ~path (fun x -> constr name' x) pcd_args)) constrs @
-      [Exp.case [%pat? _] error] |>
+      [Exp.case [%pat? _] top_error] |>
       Exp.function_ |>
       wrap_decls
     | Ptype_record labels, _ ->
@@ -227,27 +236,35 @@ let str_of_type ~options ~path ({ ptype_loc = loc } as type_decl) =
                [%e ser_expr_of_typ pld_type] [%e Exp.field (evar "x") (mknoloc (Lident name))]]) |>
       fun fields -> [%expr fun x -> `Assoc [%e list fields]],
       (* desu *)
-      let typs   = List.map (fun { pld_type } -> pld_type) labels in
       let record =
-        desu_fold ~path (fun xs ->
-          Exp.record (List.map2 (fun { pld_name = { txt = name } } x ->
-            (mknoloc (Lident name)), x) labels xs) None) typs
+        List.fold_left (fun expr i ->
+            [%expr [%e evar (argn i)] >>= fun [%p pvar (argn i)] -> [%e expr]])
+          [%expr `Ok [%e Exp.record (labels |> List.mapi (fun i { pld_name = { txt = name } } ->
+                            mknoloc (Lident name), evar (argn i))) None]]
+          (labels |> List.mapi (fun i _ -> i))
+      in
+      let cases =
+        (labels |> List.mapi (fun i { pld_name = { txt = name }; pld_type; pld_attributes } ->
+          let path = path @ [name] in
+          let thunks = labels |> List.mapi (fun j _ ->
+            if i = j then app (desu_expr_of_typ ~path pld_type) [evar "x"] else evar (argn j)) in
+          Exp.case [%pat? ([%p pstr (attr_key name pld_attributes)], x) :: xs]
+                   [%expr loop xs [%e tuple thunks]])) @
+        [Exp.case [%pat? []] record;
+         Exp.case [%pat? _]  top_error]
+      and thunks =
+        labels |> List.map (fun { pld_name = { txt = name }; pld_type } ->
+          match attr_default pld_type.ptyp_attributes with
+          | None   -> error (path @ [name])
+          | Some x -> [%expr `Ok [%e x]])
       in
       [%expr
         function
         | `Assoc xs ->
-          begin try
-            let [%p ptuple (List.mapi (fun i _ -> pvar (argn i)) labels)] =
-              [%e tuple (List.mapi (fun i { pld_name = { txt = name }; pld_attributes } ->
-                    [%expr List.assoc [%e str (attr_key name pld_attributes)] xs]) labels)] in
-            if List.length xs = [%e int (List.length labels)] then
-              [%e record]
-            else
-              [%e error]
-          with Not_found ->
-            [%e error]
-          end
-        | _ -> [%e error]] |>
+          let rec loop xs [%p ptuple (List.mapi (fun i _ -> pvar (argn i)) labels)] =
+            [%e Exp.match_ [%expr xs] cases]
+          in loop xs [%e tuple thunks]
+        | _ -> [%e top_error]] |>
       wrap_decls
     | Ptype_abstract, None -> raise_errorf ~loc "Cannot derive Yojson for fully abstract type"
     | Ptype_open, _        -> raise_errorf ~loc "Cannot derive Yojson for open type"

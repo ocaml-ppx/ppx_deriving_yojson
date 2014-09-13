@@ -179,6 +179,15 @@ let test_custpvar ctxt =
   assert_roundtrip pp_custpvar custpvar_to_yojson custpvar_of_yojson
                    `Vodka "[\"vodka\"]"
 
+type default = {
+  def : int [@default 42];
+} [@@deriving Yojson, Show]
+let test_default ctxt =
+  assert_equal ~printer:(show_error_or pp_default)
+               (`Ok { def = 42 }) (default_of_yojson (`Assoc []));
+  assert_equal ~printer:show_json
+               (`Assoc ["def", `Int 42]) (default_to_yojson { def = 42 })
+
 let suite = "Test ppx_yojson" >::: [
     "test_int"       >:: test_int;
     "test_float"     >:: test_float;
@@ -198,7 +207,8 @@ let suite = "Test ppx_yojson" >::: [
     "test_id"        >:: test_id;
     "test_custvar"   >:: test_custvar;
     "test_custpvar"  >:: test_custpvar;
-    (* "test_field_err" >:: test_field_err; *)
+    "test_field_err" >:: test_field_err;
+    "test_default"   >:: test_default;
   ]
 
 let _ =
