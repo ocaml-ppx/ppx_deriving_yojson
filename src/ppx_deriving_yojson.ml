@@ -230,11 +230,23 @@ let str_of_type ~options ~path ({ ptype_loc = loc } as type_decl) =
       wrap_decls
     | Ptype_record labels, _ ->
       (* ser *)
-      labels |>
-      List.mapi (fun i { pld_name = { txt = name }; pld_type; pld_attributes } ->
-        [%expr [%e str (attr_key name pld_attributes)],
-               [%e ser_expr_of_typ pld_type] [%e Exp.field (evar "x") (mknoloc (Lident name))]]) |>
-      fun fields -> [%expr fun x -> `Assoc [%e list fields]],
+      let fields =
+        labels |>
+        List.mapi (fun i { pld_name = { txt = name }; pld_type; pld_attributes } ->
+          let field  = Exp.field (evar "x") (mknoloc (Lident name)) in
+          let result = [%expr [%e str (attr_key name pld_attributes)],
+                              [%e ser_expr_of_typ pld_type] [%e field]] in
+          match attr_default pld_type.ptyp_attributes with
+          | None ->
+            [%expr [%e result] :: fields]
+          | Some default ->
+            [%expr if [%e field] = [%e default] then fields else [%e result] :: fields])
+      in
+      let assoc =
+        List.fold_left (fun expr field -> [%expr let fields = [%e field] in [%e expr]])
+          [%expr `Assoc fields] fields
+      in
+      [%expr fun x -> let fields = [] in [%e assoc]],
       (* desu *)
       let record =
         List.fold_left (fun expr i ->

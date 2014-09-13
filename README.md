@@ -112,6 +112,8 @@ type pagination = {
 } [@@deriving Yojson]
 ```
 
+Fields with default values are not required to be present in inputs and will not be emitted in outputs.
+
 License
 -------
 

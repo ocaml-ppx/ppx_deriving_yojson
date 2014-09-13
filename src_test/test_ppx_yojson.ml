@@ -183,10 +183,8 @@ type default = {
   def : int [@default 42];
 } [@@deriving Yojson, Show]
 let test_default ctxt =
-  assert_equal ~printer:(show_error_or pp_default)
-               (`Ok { def = 42 }) (default_of_yojson (`Assoc []));
-  assert_equal ~printer:show_json
-               (`Assoc ["def", `Int 42]) (default_to_yojson { def = 42 })
+  assert_roundtrip pp_default default_to_yojson default_of_yojson
+                   { def = 42 } "{}"
 
 let suite = "Test ppx_yojson" >::: [
     "test_int"       >:: test_int;
