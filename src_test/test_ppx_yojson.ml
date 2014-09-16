@@ -37,6 +37,10 @@ type 'a p = 'a option
 [@@deriving Show, Yojson]
 type pv = [ `A | `B of int | `C of int * string ]
 [@@deriving Show, Yojson]
+type pva = [ `A ] and pvb = [ `B ]
+[@@deriving Show, Yojson]
+type pvc = [ pva | pvb ]
+[@@deriving Show, Yojson]
 
 type v  = A | B of int | C of int * string
 [@@deriving Show, Yojson]
@@ -122,7 +126,14 @@ let test_pvar ctxt =
   assert_roundtrip pp_pv pv_to_yojson pv_of_yojson
                    (`B 42) "[\"B\", 42]";
   assert_roundtrip pp_pv pv_to_yojson pv_of_yojson
-                   (`C (42, "foo")) "[\"C\", 42, \"foo\"]"
+                   (`C (42, "foo")) "[\"C\", 42, \"foo\"]";
+  assert_roundtrip pp_pvc pvc_to_yojson pvc_of_yojson
+                   `A "[\"A\"]";
+  assert_roundtrip pp_pvc pvc_to_yojson pvc_of_yojson
+                   `B "[\"B\"]";
+  assert_equal ~printer:(show_error_or pp_pvc)
+               (`Error "Test_ppx_yojson.pvc")
+               (pvc_of_yojson (`List [`String "C"]))
 
 let test_var ctxt =
   assert_roundtrip pp_v v_to_yojson v_of_yojson

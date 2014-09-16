@@ -157,8 +157,9 @@ and desu_expr_of_typ ~path typ =
     decode [%pat? `List [%p plist (List.mapi (fun i _ -> pvar (argn i)) typs)]]
            (desu_fold ~path tuple typs)
   | { ptyp_desc = Ptyp_variant (fields, _, _); ptyp_loc } ->
-    let cases =
-      List.map (fun field ->
+    let inherits, tags = List.partition (function Rinherit _ -> true | _ -> false) fields in
+    let tag_cases =
+      tags |> List.map (fun field ->
         match field with
         | Rtag (label, attrs, true (*empty*), []) ->
           Exp.case [%pat? `List [`String [%p pstr (attr_name label attrs)]]]
@@ -176,10 +177,19 @@ and desu_expr_of_typ ~path typ =
                    [%expr [%e desu_expr_of_typ ~path typ] x]
         | _ ->
           raise_errorf ~loc:ptyp_loc "Cannot derive Yojson for %s"
-                       (Ppx_deriving.string_of_core_type typ)) fields @
-      [Exp.case [%pat? _] error]
+                       (Ppx_deriving.string_of_core_type typ))
+    and inherits_case =
+      inherits |>
+      List.map (function Rinherit typ -> typ | _ -> assert false) |>
+      List.fold_left (fun expr typ ->
+        [%expr
+          match [%e desu_expr_of_typ ~path typ] json with
+          | (`Ok _) as result -> result
+          | `Error _ -> [%e expr]]) error |>
+      Exp.case [%pat? _]
     in
-    [%expr fun (json : Yojson.Safe.json) -> [%e Exp.match_ [%expr json] cases]]
+    [%expr fun (json : Yojson.Safe.json) ->
+      [%e Exp.match_ [%expr json] (tag_cases @ [inherits_case])]]
   | { ptyp_desc = Ptyp_constr ({ txt = lid }, args) } ->
     app (Exp.ident (mknoloc (Ppx_deriving.mangle_lid (`Suffix "of_yojson") lid)))
         (List.map (desu_expr_of_typ ~path) args)
