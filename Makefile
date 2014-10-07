@@ -42,7 +42,7 @@ release: #gh-pages
 	git branch -D release
 	git push origin v$(VERSION)
 	@echo ">>>>>> Updating OPAM repository"
-	repo="$$(git config remote.origin.url | cut -d: -f2)" \
+	repo="$$(git config remote.origin.url | cut -d: -f2 | sed 's/.git//')" \
 	 user="$$(echo $${repo} | cut -d/ -f1)" \
 	 pkg="$$(echo $${repo} | cut -d/ -f2)" \
 	 url="https://github.com/$${repo}/archive/v$(VERSION).tar.gz" \
