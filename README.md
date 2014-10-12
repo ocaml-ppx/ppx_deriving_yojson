@@ -37,6 +37,8 @@ val ty_to_yojson : ty -> Yojson.Safe.json
 
 When the deserializing function returns <code>\`Error loc</code>, `loc` points to the point in the JSON hierarchy where the error has occurred.
 
+It is possible to generate only serializing or deserializing functions by using `[@@deriving to_yojson]` or `[@@deriving of_yojson]`. It is also possible to generate an expression for serializing or deserializing a type by using `[%to_yojson:]` or `[%of_yojson:]`; non-conflicting versions `[%derive.to_yojson:]` or `[%derive.of_yojson:]` are available as well.
+
 Semantics
 ---------
 

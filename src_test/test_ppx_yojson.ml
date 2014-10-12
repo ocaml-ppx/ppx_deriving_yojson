@@ -197,6 +197,15 @@ let test_default ctxt =
   assert_roundtrip pp_default default_to_yojson default_of_yojson
                    { def = 42 } "{}"
 
+type bidi = int [@@deriving show, to_yojson, of_yojson]
+let test_bidi ctxt =
+  assert_roundtrip pp_bidi bidi_to_yojson bidi_of_yojson
+                   42 "42"
+
+let test_shortcut ctxt =
+  assert_roundtrip pp_i1 [%to_yojson: int] [%of_yojson: int]
+                   42 "42"
+
 let suite = "Test ppx_yojson" >::: [
     "test_int"       >:: test_int;
     "test_float"     >:: test_float;
@@ -218,6 +227,8 @@ let suite = "Test ppx_yojson" >::: [
     "test_custpvar"  >:: test_custpvar;
     "test_field_err" >:: test_field_err;
     "test_default"   >:: test_default;
+    "test_bidi"      >:: test_bidi;
+    "test_shortcut"  >:: test_shortcut;
   ]
 
 let _ =

@@ -6,6 +6,8 @@ Changelog
 
   * Common helper functions have been extracted into
     ppx_deriving_yojson.runtime, reducing code size.
+  * Add support for `[@@deriving to_yojson, of_yojson]`
+    and `[%to_yojson:]`, `[%of_yojson:]` shortcuts.
 
 0.2
 ---

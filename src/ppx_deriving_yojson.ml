@@ -201,17 +201,14 @@ and desu_expr_of_typ ~path typ =
     raise_errorf ~loc:ptyp_loc "Cannot derive yojson for %s"
                  (Ppx_deriving.string_of_core_type typ)
 
-let str_of_type ~options ~path ({ ptype_loc = loc } as type_decl) =
-  let path = path @ [type_decl.ptype_name.txt] in
-  let wrap_decls decls = [%expr let open Ppx_deriving_yojson_runtime in [%e decls]] in
-  let error path = [%expr `Error [%e str (String.concat "." path)]] in
-  let top_error = error path in
-  let serializer, desurializer =
+let wrap_runtime decls =
+  [%expr let open Ppx_deriving_yojson_runtime in [%e decls]]
+
+let ser_str_of_type ~options ~path ({ ptype_loc = loc } as type_decl) =
+  let serializer =
     match type_decl.ptype_kind, type_decl.ptype_manifest with
-    | Ptype_abstract, Some manifest ->
-      ser_expr_of_typ manifest, wrap_decls (desu_expr_of_typ ~path manifest)
+    | Ptype_abstract, Some manifest -> ser_expr_of_typ manifest
     | Ptype_variant constrs, _ ->
-      (* ser *)
       constrs |>
       List.map (fun { pcd_name = { txt = name' }; pcd_args; pcd_attributes } ->
         let args = List.mapi (fun i typ -> app (ser_expr_of_typ typ) [evar (argn i)]) pcd_args in
@@ -222,17 +219,8 @@ let str_of_type ~options ~path ({ ptype_loc = loc } as type_decl) =
           | args -> [%expr `List ((`String [%e str json_name]) :: [%e list args])]
         in
         Exp.case (pconstr name' (List.mapi (fun i _ -> pvar (argn i)) pcd_args)) result) |>
-      Exp.function_,
-      (* desu *)
-      List.map (fun { pcd_name = { txt = name' }; pcd_args; pcd_attributes } ->
-        Exp.case [%pat? `List ((`String [%p pstr (attr_name name' pcd_attributes)]) ::
-                          [%p plist (List.mapi (fun i _ -> pvar (argn i)) pcd_args)])]
-                 (desu_fold ~path (fun x -> constr name' x) pcd_args)) constrs @
-      [Exp.case [%pat? _] top_error] |>
-      Exp.function_ |>
-      wrap_decls
+      Exp.function_
     | Ptype_record labels, _ ->
-      (* ser *)
       let fields =
         labels |>
         List.mapi (fun i { pld_name = { txt = name }; pld_type; pld_attributes } ->
@@ -249,8 +237,30 @@ let str_of_type ~options ~path ({ ptype_loc = loc } as type_decl) =
         List.fold_left (fun expr field -> [%expr let fields = [%e field] in [%e expr]])
           [%expr `Assoc fields] fields
       in
-      [%expr fun x -> let fields = [] in [%e assoc]],
-      (* desu *)
+      [%expr fun x -> let fields = [] in [%e assoc]]
+    | Ptype_abstract, None -> raise_errorf ~loc "Cannot derive yojson for fully abstract type"
+    | Ptype_open, _        -> raise_errorf ~loc "Cannot derive yojson for open type"
+  in
+  let polymorphize = Ppx_deriving.poly_fun_of_type_decl type_decl in
+  [Vb.mk (pvar (Ppx_deriving.mangle_type_decl (`Suffix "to_yojson") type_decl))
+               (polymorphize [%expr ([%e serializer] : _ -> Yojson.Safe.json)])]
+
+let desu_str_of_type ~options ~path ({ ptype_loc = loc } as type_decl) =
+  let path = path @ [type_decl.ptype_name.txt] in
+  let error path = [%expr `Error [%e str (String.concat "." path)]] in
+  let top_error = error path in
+  let desurializer =
+    match type_decl.ptype_kind, type_decl.ptype_manifest with
+    | Ptype_abstract, Some manifest ->
+      desu_expr_of_typ ~path manifest
+    | Ptype_variant constrs, _ ->
+      List.map (fun { pcd_name = { txt = name' }; pcd_args; pcd_attributes } ->
+        Exp.case [%pat? `List ((`String [%p pstr (attr_name name' pcd_attributes)]) ::
+                          [%p plist (List.mapi (fun i _ -> pvar (argn i)) pcd_args)])]
+                 (desu_fold ~path (fun x -> constr name' x) pcd_args)) constrs @
+      [Exp.case [%pat? _] top_error] |>
+      Exp.function_
+    | Ptype_record labels, _ ->
       let record =
         List.fold_left (fun expr i ->
             [%expr [%e evar (argn i)] >>= fun [%p pvar (argn i)] -> [%e expr]])
@@ -279,35 +289,55 @@ let str_of_type ~options ~path ({ ptype_loc = loc } as type_decl) =
           let rec loop xs [%p ptuple (List.mapi (fun i _ -> pvar (argn i)) labels)] =
             [%e Exp.match_ [%expr xs] cases]
           in loop xs [%e tuple thunks]
-        | _ -> [%e top_error]] |>
-      wrap_decls
+        | _ -> [%e top_error]]
     | Ptype_abstract, None -> raise_errorf ~loc "Cannot derive yojson for fully abstract type"
     | Ptype_open, _        -> raise_errorf ~loc "Cannot derive yojson for open type"
   in
   let polymorphize = Ppx_deriving.poly_fun_of_type_decl type_decl in
-  [Vb.mk (pvar (Ppx_deriving.mangle_type_decl (`Suffix "to_yojson") type_decl))
-               (polymorphize [%expr ([%e serializer] : _ -> Yojson.Safe.json)]);
-   Vb.mk (pvar (Ppx_deriving.mangle_type_decl (`Suffix "of_yojson") type_decl))
-               (polymorphize [%expr ([%e desurializer] : Yojson.Safe.json -> _)])]
+  [Vb.mk (pvar (Ppx_deriving.mangle_type_decl (`Suffix "of_yojson") type_decl))
+               (polymorphize [%expr ([%e wrap_runtime desurializer] : Yojson.Safe.json -> _)])]
+
+let error_or typ = [%type: [ `Ok of [%t typ] | `Error of string ]]
+
+let ser_sig_of_type ~options ~path type_decl =
+  let typ = Ppx_deriving.core_type_of_type_decl type_decl in
+  let polymorphize_ser  = Ppx_deriving.poly_arrow_of_type_decl
+                            (fun var -> [%type: [%t var] -> Yojson.Safe.json]) type_decl in
+  [Sig.value (Val.mk (mknoloc (Ppx_deriving.mangle_type_decl (`Suffix "to_yojson") type_decl))
+              (polymorphize_ser  [%type: [%t typ] -> Yojson.Safe.json]))]
+
+let desu_sig_of_type ~options ~path type_decl =
+  let typ = Ppx_deriving.core_type_of_type_decl type_decl in
+  let polymorphize_desu = Ppx_deriving.poly_arrow_of_type_decl
+                            (fun var -> [%type: Yojson.Safe.json -> [%t error_or var]]) type_decl in
+  [Sig.value (Val.mk (mknoloc (Ppx_deriving.mangle_type_decl (`Suffix "of_yojson") type_decl))
+              (polymorphize_desu [%type: Yojson.Safe.json -> [%t error_or typ]]))]
+
+let str_of_type ~options ~path type_decl =
+  ser_str_of_type ~options ~path type_decl @ desu_str_of_type ~options ~path type_decl
 
 let sig_of_type ~options ~path type_decl =
-  let typ = Ppx_deriving.core_type_of_type_decl type_decl in
-  let error_or typ = [%type: [ `Ok of [%t typ] | `Error of string ]] in
-  let polymorphize_ser  = Ppx_deriving.poly_arrow_of_type_decl
-                            (fun var -> [%type: [%t var] -> Yojson.Safe.json]) type_decl
-  and polymorphize_desu = Ppx_deriving.poly_arrow_of_type_decl
-                            (fun var -> [%type: Yojson.Safe.json -> [%t error_or var]]) type_decl in
-  [Sig.value (Val.mk (mknoloc (Ppx_deriving.mangle_type_decl (`Suffix "to_yojson") type_decl))
-              (polymorphize_ser  [%type: [%t typ] -> Yojson.Safe.json]));
-   Sig.value (Val.mk (mknoloc (Ppx_deriving.mangle_type_decl (`Suffix "of_yojson") type_decl))
-              (polymorphize_desu [%type: Yojson.Safe.json -> [%t error_or typ]]))]
+  ser_sig_of_type ~options ~path type_decl @ desu_sig_of_type ~options ~path type_decl
 
 let () =
   Ppx_deriving.(register "yojson" {
-    core_type = (fun { ptyp_loc } ->
-      raise_errorf ~loc:ptyp_loc "[%%derive.yojson] is not supported");
+    core_type = None;
     structure = (fun ~options ~path type_decls ->
       [Str.value Recursive (List.concat (List.map (str_of_type ~options ~path) type_decls))]);
     signature = (fun ~options ~path type_decls ->
       List.concat (List.map (sig_of_type ~options ~path) type_decls));
+  });
+  Ppx_deriving.(register "to_yojson" {
+    core_type = Some ser_expr_of_typ;
+    structure = (fun ~options ~path type_decls ->
+      [Str.value Recursive (List.concat (List.map (ser_str_of_type ~options ~path) type_decls))]);
+    signature = (fun ~options ~path type_decls ->
+      List.concat (List.map (ser_sig_of_type ~options ~path) type_decls));
+  });
+  Ppx_deriving.(register "of_yojson" {
+    core_type = Some (fun typ -> wrap_runtime (desu_expr_of_typ ~path:[] typ));
+    structure = (fun ~options ~path type_decls ->
+      [Str.value Recursive (List.concat (List.map (desu_str_of_type ~options ~path) type_decls))]);
+    signature = (fun ~options ~path type_decls ->
+      List.concat (List.map (desu_sig_of_type ~options ~path) type_decls));
   })
