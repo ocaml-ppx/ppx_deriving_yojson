@@ -16,7 +16,6 @@ build-test: [
 ]
 depends: [
   "yojson"
-  "containers"
   "ppx_deriving" {>= "0.2"}
   "ounit"        {test}
   "ppx_import"   {test}
