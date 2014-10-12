@@ -310,9 +310,9 @@ let sig_of_type ~options ~path type_decl =
               (polymorphize_desu [%type: Yojson.Safe.json -> [%t error_or typ]]))]
 
 let () =
-  Ppx_deriving.(register "Yojson" {
+  Ppx_deriving.(register "yojson" {
     core_type = (fun { ptyp_loc } ->
-      raise_errorf ~loc:ptyp_loc "[%%derive.Yojson] is not supported");
+      raise_errorf ~loc:ptyp_loc "[%%derive.yojson] is not supported");
     structure = (fun ~options ~path type_decls ->
       [Str.value Recursive (List.concat (List.map (str_of_type ~options ~path) type_decls))]);
     signature = (fun ~options ~path type_decls ->

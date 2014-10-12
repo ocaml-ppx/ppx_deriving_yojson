@@ -1,7 +1,7 @@
 open OUnit2
 
-type json = [%import: Yojson.Safe.json] [@@deriving Show]
-type 'a error_or = [ `Ok of 'a | `Error of string ] [@@deriving Show]
+type json = [%import: Yojson.Safe.json] [@@deriving show]
+type 'a error_or = [ `Ok of 'a | `Error of string ] [@@deriving show]
 
 let assert_roundtrip pp_obj to_json of_json obj str =
   let json = Yojson.Safe.from_string str in
@@ -13,39 +13,39 @@ let assert_failure pp_obj of_json err str =
   let json = Yojson.Safe.from_string str in
   assert_equal ~printer:(show_error_or pp_obj) (`Error err) (of_json json)
 
-type i1 = int         [@@deriving Show, Yojson]
-type i2 = int32       [@@deriving Show, Yojson]
-type i3 = Int32.t     [@@deriving Show, Yojson]
-type i4 = int64       [@@deriving Show, Yojson]
-type i5 = Int64.t     [@@deriving Show, Yojson]
-type i6 = nativeint   [@@deriving Show, Yojson]
-type i7 = Nativeint.t [@@deriving Show, Yojson]
-type i8 = int64       [@encoding `string] [@@deriving Show, Yojson]
-type i9 = nativeint   [@encoding `string] [@@deriving Show, Yojson]
-type f  = float       [@@deriving Show, Yojson]
-type b  = bool        [@@deriving Show, Yojson]
-type c  = char        [@@deriving Show, Yojson]
-type s  = string      [@@deriving Show, Yojson]
-type y  = bytes       [@@deriving Show, Yojson]
-type xr = int ref     [@@deriving Show, Yojson]
-type xo = int option  [@@deriving Show, Yojson]
-type xl = int list    [@@deriving Show, Yojson]
-type xa = int array   [@@deriving Show, Yojson]
-type xt = int * int   [@@deriving Show, Yojson]
+type i1 = int         [@@deriving show, yojson]
+type i2 = int32       [@@deriving show, yojson]
+type i3 = Int32.t     [@@deriving show, yojson]
+type i4 = int64       [@@deriving show, yojson]
+type i5 = Int64.t     [@@deriving show, yojson]
+type i6 = nativeint   [@@deriving show, yojson]
+type i7 = Nativeint.t [@@deriving show, yojson]
+type i8 = int64       [@encoding `string] [@@deriving show, yojson]
+type i9 = nativeint   [@encoding `string] [@@deriving show, yojson]
+type f  = float       [@@deriving show, yojson]
+type b  = bool        [@@deriving show, yojson]
+type c  = char        [@@deriving show, yojson]
+type s  = string      [@@deriving show, yojson]
+type y  = bytes       [@@deriving show, yojson]
+type xr = int ref     [@@deriving show, yojson]
+type xo = int option  [@@deriving show, yojson]
+type xl = int list    [@@deriving show, yojson]
+type xa = int array   [@@deriving show, yojson]
+type xt = int * int   [@@deriving show, yojson]
 
 type 'a p = 'a option
-[@@deriving Show, Yojson]
+[@@deriving show, yojson]
 type pv = [ `A | `B of int | `C of int * string ]
-[@@deriving Show, Yojson]
+[@@deriving show, yojson]
 type pva = [ `A ] and pvb = [ `B ]
-[@@deriving Show, Yojson]
+[@@deriving show, yojson]
 type pvc = [ pva | pvb ]
-[@@deriving Show, Yojson]
+[@@deriving show, yojson]
 
 type v  = A | B of int | C of int * string
-[@@deriving Show, Yojson]
+[@@deriving show, yojson]
 type r  = { x : int; y : string }
-[@@deriving Show, Yojson]
+[@@deriving show, yojson]
 
 let test_int ctxt =
   assert_roundtrip pp_i1 i1_to_yojson i1_of_yojson
@@ -151,7 +151,7 @@ type geo = {
   lat [@key "Latitude"]  : float;
   lon [@key "Longitude"] : float;
 }
-[@@deriving Yojson, Show]
+[@@deriving yojson, show]
 let test_key ctxt =
   assert_roundtrip pp_geo geo_to_yojson geo_of_yojson
                    {lat=35.6895; lon=139.6917}
@@ -162,7 +162,7 @@ let test_field_err ctxt =
                (`Error "Test_ppx_yojson.geo.lat")
                (geo_of_yojson (`Assoc ["Longitude", (`Float 42.0)]))
 
-type id = Yojson.Safe.json [@@deriving Yojson]
+type id = Yojson.Safe.json [@@deriving yojson]
 let test_id ctxt =
   assert_roundtrip pp_json id_to_yojson id_of_yojson
                    (`Int 42) "42"
@@ -170,7 +170,7 @@ let test_id ctxt =
 type custvar =
 | Tea   [@name "tea"]   of string
 | Vodka [@name "vodka"]
-[@@deriving Yojson, Show]
+[@@deriving yojson, show]
 let test_custvar ctxt =
   assert_roundtrip pp_custvar custvar_to_yojson custvar_of_yojson
                    (Tea "oolong") "[\"tea\", \"oolong\"]";
@@ -181,7 +181,7 @@ type custpvar =
 [ `Tea   [@name "tea"]   of string
 | `Beer  [@name "beer"]  of string * float
 | `Vodka [@name "vodka"]
-] [@@deriving Yojson, Show]
+] [@@deriving yojson, show]
 let test_custpvar ctxt =
   assert_roundtrip pp_custpvar custpvar_to_yojson custpvar_of_yojson
                    (`Tea "earl_grey") "[\"tea\", \"earl_grey\"]";
@@ -192,7 +192,7 @@ let test_custpvar ctxt =
 
 type default = {
   def : int [@default 42];
-} [@@deriving Yojson, Show]
+} [@@deriving yojson, show]
 let test_default ctxt =
   assert_roundtrip pp_default default_to_yojson default_of_yojson
                    { def = 42 } "{}"
