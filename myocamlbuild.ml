@@ -11,5 +11,6 @@ let () = dispatch (
         A"-ppx"; A("ocamlfind ppx_deriving/ppx_deriving "^
                    "src/ppx_deriving_yojson.cma "^
                    (std_deriver "ppx_deriving_show.cma"))];
+    ocaml_lib ~dir:"src" "src/ppx_deriving_yojson_runtime";
 
   | _ -> ())

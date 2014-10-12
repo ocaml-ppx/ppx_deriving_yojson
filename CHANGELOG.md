@@ -1,6 +1,12 @@
 Changelog
 =========
 
+0.3
+---
+
+  * Common helper functions have been extracted into
+    ppx_deriving_yojson.runtime, reducing code size.
+
 0.2
 ---
 

@@ -203,14 +203,7 @@ and desu_expr_of_typ ~path typ =
 
 let str_of_type ~options ~path ({ ptype_loc = loc } as type_decl) =
   let path = path @ [type_decl.ptype_name.txt] in
-  let wrap_decls decls = [%expr
-    (let (>>=) x f = match x with `Ok x -> f x | (`Error _) as x -> x in
-     let (>|=) x f = x >>= fun x -> `Ok (f x) in
-     let rec map_bind f acc xs =
-       match xs with
-       | x :: xs -> f x >>= fun x -> map_bind f (x :: acc) xs
-       | [] -> `Ok (List.rev acc)
-     in [%e decls]) [@ocaml.warning "-26"]] in
+  let wrap_decls decls = [%expr let open Ppx_deriving_yojson_runtime in [%e decls]] in
   let error path = [%expr `Error [%e str (String.concat "." path)]] in
   let top_error = error path in
   let serializer, desurializer =

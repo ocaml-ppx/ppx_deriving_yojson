@@ -1,8 +1,19 @@
 version = "%%VERSION%%"
 description = "[@@deriving yojson]"
-requires = "ppx_deriving yojson"
+requires = "ppx_deriving ppx_deriving_yojson.runtime"
 ppxopt = "ppx_deriving,./ppx_deriving_yojson.cma"
 requires(ppx_driver) = "ppx_deriving.api"
 archive(ppx_driver, byte) = "ppx_deriving_yojson.cma"
 archive(ppx_driver, native) = "ppx_deriving_yojson.cmxa"
 exists_if = "ppx_deriving_yojson.cma"
+
+package "runtime" (
+  version = "%%VERSION%%"
+  description = "Runtime components of [@@deriving yojson]"
+  requires = "yojson"
+  archive(byte) = "ppx_deriving_yojson_runtime.cma"
+  archive(byte, plugin) = "ppx_deriving_yojson_runtime.cma"
+  archive(native) = "ppx_deriving_yojson_runtime.cmxa"
+  archive(native, plugin) = "ppx_deriving_yojson_runtime.cmxs"
+  exists_if = "ppx_deriving_yojson_runtime.cma"
+)
