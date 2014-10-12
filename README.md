@@ -1,4 +1,4 @@
-[@@deriving Yojson]
+[@@deriving yojson]
 ===================
 
 _deriving Yojson_ is a [ppx_deriving][pd] plugin that generates
@@ -21,17 +21,16 @@ _deriving Yojson_ can be installed via [OPAM](https://opam.ocaml.org):
 Usage
 -----
 
-In order to use _deriving Yojson_, require the syntax extension package
-`ppx_deriving` and the runtime library package `ppx_deriving_yojson.runtime`.
+In order to use _deriving yojson_, require the package `ppx_deriving_yojson`.
 
 Syntax
 ------
 
-_deriving Yojson_ generates two functions per type:
+_deriving yojson_ generates two functions per type:
 
 ``` ocaml
 # #require "ppx_deriving";;
-# type ty = .. [@@deriving Yojson];;
+# type ty = .. [@@deriving yojson];;
 val ty_of_yojson : Yojson.Safe.json -> [ `Ok of ty | `Error of string ]
 val ty_to_yojson : ty -> Yojson.Safe.json
 ```
@@ -41,7 +40,7 @@ When the deserializing function returns <code>\`Error loc</code>, `loc` points t
 Semantics
 ---------
 
-_deriving Yojson_ handles tuples, records, normal and polymorphic variants; builtin types: `int`, `int32`, `int64`, `nativeint`, `float`, `bool`, `char`, `string`, `bytes`, `ref`, `list`, `array`, `option` and their `Mod.t` aliases.
+_deriving yojson_ handles tuples, records, normal and polymorphic variants; builtin types: `int`, `int32`, `int64`, `nativeint`, `float`, `bool`, `char`, `string`, `bytes`, `ref`, `list`, `array`, `option` and their `Mod.t` aliases.
 
 The following table summarizes the correspondence between OCaml types and JSON values:
 
@@ -61,9 +60,9 @@ The following table summarizes the correspondence between OCaml types and JSON v
 Variants (regular and polymorphic) are represented using arrays; the first element is a string with the name of the constructor, the rest are the arguments. Note that the implicit tuple in a polymorphic variant is flattened. For example:
 
 ``` ocaml
-# type pvs = [ `A | `B of int | `C of int * string ] list [@@deriving Yojson];;
-# type v = A | B of int | C of int * string [@@deriving Yojson];;
-# type vs = v list [@@deriving Yojson];;
+# type pvs = [ `A | `B of int | `C of int * string ] list [@@deriving yojson];;
+# type v = A | B of int | C of int * string [@@deriving yojson];;
+# type vs = v list [@@deriving yojson];;
 # print_endline (Yojson.Safe.to_string (vs_to_yojson [A; B 42; C (42, "foo")]));;
 [["A"],["B",42],["C",42,"foo"]]
 # print_endline (Yojson.Safe.to_string (pvs_to_yojson [`A; `B 42; `C (42, "foo")]));;
@@ -83,7 +82,7 @@ type geo = {
   lat [@key "Latitude"]  : float;
   lon [@key "Longitude"] : float;
 }
-[@@deriving Yojson]
+[@@deriving yojson]
 ```
 
 #### [@name]
@@ -94,7 +93,7 @@ If the JSON variant names differ from OCaml conventions, it is possible to speci
 type units =
 | Metric   [@name "metric"]
 | Imperial [@name "imperial"]
-[@@deriving Yojson]
+[@@deriving yojson]
 ```
 
 #### [@encoding]
@@ -109,7 +108,7 @@ It is possible to specify a default value for fields that can be missing from th
 type pagination = {
   pages   : int;
   current : int [@default 0];
-} [@@deriving Yojson]
+} [@@deriving yojson]
 ```
 
 Fields with default values are not required to be present in inputs and will not be emitted in outputs.
@@ -117,4 +116,4 @@ Fields with default values are not required to be present in inputs and will not
 License
 -------
 
-_deriving Yojson_ is distributed under the terms of [MIT license](LICENSE.txt).
+_deriving yojson_ is distributed under the terms of [MIT license](LICENSE.txt).
