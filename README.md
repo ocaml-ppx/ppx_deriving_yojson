@@ -47,7 +47,7 @@ The following table summarizes the correspondence between OCaml types and JSON v
 | OCaml type             | JSON value | Remarks                          |
 | ---------------------- | ---------- | -------------------------------- |
 | `int`, `int32`, `float`| Number     |                                  |
-| `int64`, `nativeint`   | Number     | Can exceed range of `float`      |
+| `int64`, `nativeint`   | Number     | Can exceed range of `double`     |
 | `bool`                 | Boolean    |                                  |
 | `string`, `bytes`      | String     |                                  |
 | `char`                 | String     | Strictly one character in length |
@@ -98,7 +98,7 @@ type units =
 
 #### [@encoding]
 
-Very large `int64` and `nativeint` numbers can wrap when decoded in a runtime which only has floats, e.g. JavaScript and Lua. It is possible to specify the <code>[@encoding \`string]</code> attribute to encode them as strings.
+Very large `int64` and `nativeint` numbers can wrap when decoded in a runtime which represents all numbers using double-precision floating point, e.g. JavaScript and Lua. It is possible to specify the <code>[@encoding \`string]</code> attribute to encode them as strings.
 
 #### [@default]
 
