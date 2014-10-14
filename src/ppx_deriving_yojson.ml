@@ -30,10 +30,6 @@ let attr_default attrs =
   Ppx_deriving.attr ~prefix "default" attrs |>  (* TODO vvv replace with expr *)
   Ppx_deriving.Arg.(payload ~name:"yojson" (fun x -> `Ok x))
 
-(* TODO remove after ppx_tools 0.99.3 *)
-let tuple l  = match l with [x] -> x | xs -> Exp.tuple xs
-let ptuple l = match l with [x] -> x | xs -> Pat.tuple xs
-
 let rec ser_expr_of_typ typ =
   let attr_int_encoding typ =
     match attr_int_encoding typ with `String -> "String" | `Int -> "Intlit"
