@@ -5,21 +5,21 @@ open Parsetree
 open Ast_helper
 open Ast_convenience
 
-let prefix = "yojson"
+let deriver = "yojson"
 let raise_errorf = Ppx_deriving.raise_errorf
 
 let argn = Printf.sprintf "arg%d"
 
 let attr_int_encoding attrs =
-  match Ppx_deriving.attr ~prefix "encoding" attrs |>
-        Ppx_deriving.Arg.(payload ~name:"yojson" (enum ["string"; "number"])) with
+  match Ppx_deriving.attr ~deriver "encoding" attrs |>
+        Ppx_deriving.Arg.(get_attr ~deriver (enum ["string"; "number"])) with
   | Some "string" -> `String
   | Some "number" | None -> `Int
   | _ -> assert false
 
 let attr_string name default attrs =
-  match Ppx_deriving.attr ~prefix name attrs |>
-        Ppx_deriving.Arg.(payload ~name:"yojson" string) with
+  match Ppx_deriving.attr ~deriver name attrs |>
+        Ppx_deriving.Arg.(get_attr ~deriver string) with
   | Some x -> x
   | None   -> default
 
@@ -27,8 +27,8 @@ let attr_key  = attr_string "key"
 let attr_name = attr_string "name"
 
 let attr_default attrs =
-  Ppx_deriving.attr ~prefix "default" attrs |>  (* TODO vvv replace with expr *)
-  Ppx_deriving.Arg.(payload ~name:"yojson" (fun x -> `Ok x))
+  Ppx_deriving.attr ~deriver "default" attrs |>
+  Ppx_deriving.Arg.(get_attr ~deriver expr)
 
 let rec ser_expr_of_typ typ =
   let attr_int_encoding typ =
@@ -83,16 +83,16 @@ let rec ser_expr_of_typ typ =
           Exp.case [%pat? [%p Pat.type_ tname] as x]
                    [%expr [%e ser_expr_of_typ typ] x]
         | _ ->
-          raise_errorf ~loc:ptyp_loc "Cannot derive yojson for %s"
-                       (Ppx_deriving.string_of_core_type typ))
+          raise_errorf ~loc:ptyp_loc "%s cannot be derived for %s"
+                       deriver (Ppx_deriving.string_of_core_type typ))
     in
     Exp.function_ cases
   | { ptyp_desc = Ptyp_var name } -> [%expr ([%e evar ("poly_"^name)] : 'a -> Yojson.Safe.json)]
   | { ptyp_desc = Ptyp_alias (typ, name) } ->
     [%expr fun x -> [%e evar ("poly_"^name)] x; [%e ser_expr_of_typ typ] x]
   | { ptyp_loc } ->
-    raise_errorf ~loc:ptyp_loc "Cannot derive yojson for %s"
-                 (Ppx_deriving.string_of_core_type typ)
+    raise_errorf ~loc:ptyp_loc "%s cannot be derived for %s"
+                 deriver (Ppx_deriving.string_of_core_type typ)
 
 (* http://desuchan.net/desu/src/1284751839295.jpg *)
 let rec desu_fold ~path f typs =
@@ -172,8 +172,8 @@ and desu_expr_of_typ ~path typ =
           Exp.case [%pat? [%p Pat.type_ tname] as x]
                    [%expr [%e desu_expr_of_typ ~path typ] x]
         | _ ->
-          raise_errorf ~loc:ptyp_loc "Cannot derive yojson for %s"
-                       (Ppx_deriving.string_of_core_type typ))
+          raise_errorf ~loc:ptyp_loc "%s cannot be derived for %s"
+                       deriver (Ppx_deriving.string_of_core_type typ))
     and inherits_case =
       inherits |>
       List.map (function Rinherit typ -> typ | _ -> assert false) |>
@@ -194,8 +194,8 @@ and desu_expr_of_typ ~path typ =
   | { ptyp_desc = Ptyp_alias (typ, name) } ->
     [%expr fun x -> [%e evar ("poly_"^name)] x; [%e desu_expr_of_typ ~path typ] x]
   | { ptyp_loc } ->
-    raise_errorf ~loc:ptyp_loc "Cannot derive yojson for %s"
-                 (Ppx_deriving.string_of_core_type typ)
+    raise_errorf ~loc:ptyp_loc "%s cannot be derived for %s"
+                 deriver (Ppx_deriving.string_of_core_type typ)
 
 let wrap_runtime decls =
   [%expr let open Ppx_deriving_yojson_runtime in [%e decls]]
@@ -234,8 +234,10 @@ let ser_str_of_type ~options ~path ({ ptype_loc = loc } as type_decl) =
           [%expr `Assoc fields] fields
       in
       [%expr fun x -> let fields = [] in [%e assoc]]
-    | Ptype_abstract, None -> raise_errorf ~loc "Cannot derive yojson for fully abstract type"
-    | Ptype_open, _        -> raise_errorf ~loc "Cannot derive yojson for open type"
+    | Ptype_abstract, None ->
+      raise_errorf ~loc "%s cannot be derived for fully abstract types" deriver
+    | Ptype_open, _        ->
+      raise_errorf ~loc "%s cannot be derived for open types" deriver
   in
   let polymorphize = Ppx_deriving.poly_fun_of_type_decl type_decl in
   [Vb.mk (pvar (Ppx_deriving.mangle_type_decl (`Suffix "to_yojson") type_decl))
@@ -286,8 +288,10 @@ let desu_str_of_type ~options ~path ({ ptype_loc = loc } as type_decl) =
             [%e Exp.match_ [%expr xs] cases]
           in loop xs [%e tuple thunks]
         | _ -> [%e top_error]]
-    | Ptype_abstract, None -> raise_errorf ~loc "Cannot derive yojson for fully abstract type"
-    | Ptype_open, _        -> raise_errorf ~loc "Cannot derive yojson for open type"
+    | Ptype_abstract, None ->
+      raise_errorf ~loc "%s cannot be derived for fully abstract types" deriver
+    | Ptype_open, _        ->
+      raise_errorf ~loc "%s cannot be derived for open types" deriver
   in
   let polymorphize = Ppx_deriving.poly_fun_of_type_decl type_decl in
   [Vb.mk (pvar (Ppx_deriving.mangle_type_decl (`Suffix "of_yojson") type_decl))
