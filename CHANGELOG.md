@@ -8,6 +8,7 @@ Changelog
     ppx_deriving_yojson.runtime, reducing code size.
   * Add support for `[@@deriving to_yojson, of_yojson]`
     and `[%to_yojson:]`, `[%of_yojson:]` shortcuts.
+  * Add support for `[@@deriving yojson { strict = false }]`.
 
 0.2
 ---
