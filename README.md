@@ -71,7 +71,7 @@ Variants (regular and polymorphic) are represented using arrays; the first eleme
 [["A"],["B",42],["C",42,"foo"]]
 ```
 
-Objects are deserialized strictly; that is, all keys in the object have to correspond to fields of the record.
+By default, objects are deserialized strictly; that is, all keys in the object have to correspond to fields of the record. Passing `strict = false` as an option to the deriver  (i.e. `[@@deriving yojson { strict = false }]`) changes the behavior to ignore any unknown fields.
 
 ### Options
 

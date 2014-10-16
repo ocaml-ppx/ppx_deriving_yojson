@@ -206,6 +206,16 @@ let test_shortcut ctxt =
   assert_roundtrip pp_i1 [%to_yojson: int] [%of_yojson: int]
                    42 "42"
 
+type nostrict = {
+  nostrict_field : int;
+}
+[@@deriving show, yojson { strict = false }]
+let test_nostrict ctxt =
+  assert_equal ~printer:(show_error_or pp_nostrict)
+               (`Ok { nostrict_field = 42 })
+               (nostrict_of_yojson (`Assoc ["nostrict_field", (`Int 42);
+                                            "some_other_field", (`Int 43)]))
+
 let suite = "Test ppx_yojson" >::: [
     "test_int"       >:: test_int;
     "test_float"     >:: test_float;
@@ -229,6 +239,7 @@ let suite = "Test ppx_yojson" >::: [
     "test_default"   >:: test_default;
     "test_bidi"      >:: test_bidi;
     "test_shortcut"  >:: test_shortcut;
+    "test_nostrict"  >:: test_nostrict;
   ]
 
 let _ =

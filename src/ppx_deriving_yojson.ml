@@ -30,6 +30,14 @@ let attr_default attrs =
   Ppx_deriving.attr ~deriver "default" attrs |>
   Ppx_deriving.Arg.(get_attr ~deriver expr)
 
+let parse_options options =
+  let strict = ref true in
+  options |> List.iter (fun (name, expr) ->
+    match name with
+    | "strict" -> strict := Ppx_deriving.Arg.(get_expr ~deriver bool) expr
+    | _ -> raise_errorf ~loc:expr.pexp_loc "%s does not support option %s" deriver name);
+  !strict
+
 let rec ser_expr_of_typ typ =
   let attr_int_encoding typ =
     match attr_int_encoding typ with `String -> "String" | `Int -> "Intlit"
@@ -201,6 +209,7 @@ let wrap_runtime decls =
   [%expr let open Ppx_deriving_yojson_runtime in [%e decls]]
 
 let ser_str_of_type ~options ~path ({ ptype_loc = loc } as type_decl) =
+  ignore (parse_options options);
   let serializer =
     match type_decl.ptype_kind, type_decl.ptype_manifest with
     | Ptype_abstract, Some manifest -> ser_expr_of_typ manifest
@@ -244,6 +253,7 @@ let ser_str_of_type ~options ~path ({ ptype_loc = loc } as type_decl) =
                (polymorphize [%expr ([%e serializer] : _ -> Yojson.Safe.json)])]
 
 let desu_str_of_type ~options ~path ({ ptype_loc = loc } as type_decl) =
+  let is_strict = parse_options options in
   let path = path @ [type_decl.ptype_name.txt] in
   let error path = [%expr `Error [%e str (String.concat "." path)]] in
   let top_error = error path in
@@ -266,6 +276,7 @@ let desu_str_of_type ~options ~path ({ ptype_loc = loc } as type_decl) =
                             mknoloc (Lident name), evar (argn i))) None]]
           (labels |> List.mapi (fun i _ -> i))
       in
+      let default_case = if is_strict then top_error else [%expr loop xs _state] in
       let cases =
         (labels |> List.mapi (fun i { pld_name = { txt = name }; pld_type; pld_attributes } ->
           let path = path @ [name] in
@@ -274,7 +285,7 @@ let desu_str_of_type ~options ~path ({ ptype_loc = loc } as type_decl) =
           Exp.case [%pat? ([%p pstr (attr_key name pld_attributes)], x) :: xs]
                    [%expr loop xs [%e tuple thunks]])) @
         [Exp.case [%pat? []] record;
-         Exp.case [%pat? _]  top_error]
+         Exp.case [%pat? _ :: xs] default_case]
       and thunks =
         labels |> List.map (fun { pld_name = { txt = name }; pld_type } ->
           match attr_default pld_type.ptyp_attributes with
@@ -284,7 +295,7 @@ let desu_str_of_type ~options ~path ({ ptype_loc = loc } as type_decl) =
       [%expr
         function
         | `Assoc xs ->
-          let rec loop xs [%p ptuple (List.mapi (fun i _ -> pvar (argn i)) labels)] =
+          let rec loop xs ([%p ptuple (List.mapi (fun i _ -> pvar (argn i)) labels)] as _state) =
             [%e Exp.match_ [%expr xs] cases]
           in loop xs [%e tuple thunks]
         | _ -> [%e top_error]]
@@ -300,6 +311,7 @@ let desu_str_of_type ~options ~path ({ ptype_loc = loc } as type_decl) =
 let error_or typ = [%type: [ `Ok of [%t typ] | `Error of string ]]
 
 let ser_sig_of_type ~options ~path type_decl =
+  ignore (parse_options options);
   let typ = Ppx_deriving.core_type_of_type_decl type_decl in
   let polymorphize_ser  = Ppx_deriving.poly_arrow_of_type_decl
                             (fun var -> [%type: [%t var] -> Yojson.Safe.json]) type_decl in
@@ -307,6 +319,7 @@ let ser_sig_of_type ~options ~path type_decl =
               (polymorphize_ser  [%type: [%t typ] -> Yojson.Safe.json]))]
 
 let desu_sig_of_type ~options ~path type_decl =
+  ignore (parse_options options);
   let typ = Ppx_deriving.core_type_of_type_decl type_decl in
   let polymorphize_desu = Ppx_deriving.poly_arrow_of_type_decl
                             (fun var -> [%type: Yojson.Safe.json -> [%t error_or var]]) type_decl in
