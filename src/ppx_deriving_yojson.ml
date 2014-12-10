@@ -87,7 +87,7 @@ let rec ser_expr_of_typ typ =
           Exp.case (Pat.variant label (Some [%pat? x]))
                    [%expr `List [`String [%e str (attr_name label attrs)];
                                  [%e ser_expr_of_typ typ] x]]
-        | Rinherit ({ ptyp_desc = Ptyp_constr (tname, []) } as typ) ->
+        | Rinherit ({ ptyp_desc = Ptyp_constr (tname, _) } as typ) ->
           Exp.case [%pat? [%p Pat.type_ tname] as x]
                    [%expr [%e ser_expr_of_typ typ] x]
         | _ ->
@@ -176,7 +176,7 @@ and desu_expr_of_typ ~path typ =
           Exp.case [%pat? `List [`String [%p pstr (attr_name label attrs)]; x]]
                    [%expr [%e desu_expr_of_typ ~path typ] x >>= fun x ->
                           `Ok [%e Exp.variant label (Some [%expr x])]]
-        | Rinherit ({ ptyp_desc = Ptyp_constr (tname, []) } as typ) ->
+        | Rinherit ({ ptyp_desc = Ptyp_constr (tname, _) } as typ) ->
           Exp.case [%pat? [%p Pat.type_ tname] as x]
                    [%expr [%e desu_expr_of_typ ~path typ] x]
         | _ ->

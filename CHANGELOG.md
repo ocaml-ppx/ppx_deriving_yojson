@@ -1,6 +1,11 @@
 Changelog
 =========
 
+2.1
+---
+
+  * Handle inheriting from a parametric polymorphic variant type.
+
 2.0
 ---
 

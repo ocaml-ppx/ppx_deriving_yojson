@@ -39,7 +39,9 @@ type pv = [ `A | `B of int | `C of int * string ]
 [@@deriving show, yojson]
 type pva = [ `A ] and pvb = [ `B ]
 [@@deriving show, yojson]
-type pvc = [ pva | pvb ]
+type 'a pvc = [ `C of 'a ]
+[@@deriving show, yojson]
+type pvd = [ pva | pvb | int pvc ]
 [@@deriving show, yojson]
 
 type v  = A | B of int | C of int * string
@@ -127,13 +129,15 @@ let test_pvar ctxt =
                    (`B 42) "[\"B\", 42]";
   assert_roundtrip pp_pv pv_to_yojson pv_of_yojson
                    (`C (42, "foo")) "[\"C\", 42, \"foo\"]";
-  assert_roundtrip pp_pvc pvc_to_yojson pvc_of_yojson
+  assert_roundtrip pp_pvd pvd_to_yojson pvd_of_yojson
                    `A "[\"A\"]";
-  assert_roundtrip pp_pvc pvc_to_yojson pvc_of_yojson
+  assert_roundtrip pp_pvd pvd_to_yojson pvd_of_yojson
                    `B "[\"B\"]";
-  assert_equal ~printer:(show_error_or pp_pvc)
-               (`Error "Test_ppx_yojson.pvc")
-               (pvc_of_yojson (`List [`String "C"]))
+  assert_roundtrip pp_pvd pvd_to_yojson pvd_of_yojson
+                   (`C 1) "[\"C\", 1]";
+  assert_equal ~printer:(show_error_or pp_pvd)
+               (`Error "Test_ppx_yojson.pvd")
+               (pvd_of_yojson (`List [`String "D"]))
 
 let test_var ctxt =
   assert_roundtrip pp_v v_to_yojson v_of_yojson
