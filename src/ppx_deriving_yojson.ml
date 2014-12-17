@@ -441,26 +441,29 @@ let ser_sig_of_type ~options ~path type_decl =
   let typ = Ppx_deriving.core_type_of_type_decl type_decl in
   let polymorphize_ser  = Ppx_deriving.poly_arrow_of_type_decl
     (fun var -> [%type: [%t var] -> Yojson.Safe.json]) type_decl in
-  let types =
-    match type_decl.ptype_kind with
-      Ptype_open ->
-        let ref_name = Ppx_deriving.mangle_type_decl (`Suffix "to_yojson_ref") type_decl in
-        let record_decl =
-          let poly_vars = List.rev
-            (Ppx_deriving.fold_type_decl (fun acc name -> name :: acc) [] type_decl)
-          in
-          let typ = Ppx_deriving.core_type_of_type_decl type_decl in
-          let ty = Typ.poly poly_vars (polymorphize_ser [%type: [%t typ] -> Yojson.Safe.json]) in
-          Type.mk ~kind: (Ptype_record [ Type.field ~mut: Mutable (mknoloc ref_name) ty ])
-            (mknoloc ref_name)
-        in
-        [record_decl]
-     | _ -> []
+  let to_yojson =
+    Sig.value (Val.mk (mknoloc (Ppx_deriving.mangle_type_decl (`Suffix "to_yojson") type_decl))
+       (polymorphize_ser  [%type: [%t typ] -> Yojson.Safe.json]))
   in
-  (types,
-   [Sig.value (Val.mk (mknoloc (Ppx_deriving.mangle_type_decl (`Suffix "to_yojson") type_decl))
-      (polymorphize_ser  [%type: [%t typ] -> Yojson.Safe.json]))]
-  )
+  match type_decl.ptype_kind with
+    Ptype_open ->
+      let ref_name = Ppx_deriving.mangle_type_decl (`Suffix "to_yojson_ref") type_decl in
+      let record_decl =
+        let poly_vars = List.rev
+          (Ppx_deriving.fold_type_decl (fun acc name -> name :: acc) [] type_decl)
+        in
+        let typ = Ppx_deriving.core_type_of_type_decl type_decl in
+        let ty = Typ.poly poly_vars (polymorphize_ser [%type: [%t typ] -> Yojson.Safe.json]) in
+        Type.mk ~kind: (Ptype_record [ Type.field ~mut: Mutable (mknoloc ref_name) ty ])
+          (mknoloc ref_name)
+      in
+      let val_record =
+        let typ = Typ.constr (lid ref_name) [] in
+        Sig.value ?loc: None (Val.mk (mknoloc ref_name) typ)
+      in
+      ([record_decl], [ val_record; to_yojson])
+  | _ -> ([], [to_yojson])
+
 
 let ser_sig_of_type_ext ~options ~path type_ext = ([], [])
 
@@ -469,27 +472,30 @@ let desu_sig_of_type ~options ~path type_decl =
   let typ = Ppx_deriving.core_type_of_type_decl type_decl in
   let polymorphize_desu = Ppx_deriving.poly_arrow_of_type_decl
     (fun var -> [%type: Yojson.Safe.json -> [%t error_or var]]) type_decl in
-  let types =
-    match type_decl.ptype_kind with
-      Ptype_open ->
-        let ref_name = Ppx_deriving.mangle_type_decl (`Suffix "of_yojson_ref") type_decl in
-        let record_decl =
-          let poly_vars = List.rev
-            (Ppx_deriving.fold_type_decl (fun acc name -> name :: acc) [] type_decl)
-          in
-          let typ = Ppx_deriving.core_type_of_type_decl type_decl in
-          let ty = Typ.poly poly_vars
-            (polymorphize_desu [%type: Yojson.Safe.json -> [%t error_or typ]])
-          in
-          Type.mk ~kind: (Ptype_record [ Type.field ~mut: Mutable (mknoloc ref_name) ty ])
-            (mknoloc ref_name)
-        in
-        [record_decl]
-     | _ -> []
+  let of_yojson =
+    Sig.value (Val.mk (mknoloc (Ppx_deriving.mangle_type_decl (`Suffix "of_yojson") type_decl))
+     (polymorphize_desu [%type: Yojson.Safe.json -> [%t error_or typ]]))
   in
-  (types,
-   [Sig.value (Val.mk (mknoloc (Ppx_deriving.mangle_type_decl (`Suffix "of_yojson") type_decl))
-      (polymorphize_desu [%type: Yojson.Safe.json -> [%t error_or typ]]))])
+  match type_decl.ptype_kind with
+    Ptype_open ->
+      let ref_name = Ppx_deriving.mangle_type_decl (`Suffix "of_yojson_ref") type_decl in
+      let record_decl =
+        let poly_vars = List.rev
+          (Ppx_deriving.fold_type_decl (fun acc name -> name :: acc) [] type_decl)
+        in
+        let typ = Ppx_deriving.core_type_of_type_decl type_decl in
+        let ty = Typ.poly poly_vars
+          (polymorphize_desu [%type: Yojson.Safe.json -> [%t error_or typ]])
+        in
+        Type.mk ~kind: (Ptype_record [ Type.field ~mut: Mutable (mknoloc ref_name) ty ])
+          (mknoloc ref_name)
+      in
+      let val_record =
+        let typ = Typ.constr (lid ref_name) [] in
+        Sig.value ?loc: None (Val.mk (mknoloc ref_name) typ)
+      in
+      ([record_decl], [val_record ; of_yojson])
+     | _ -> ([], [of_yojson])
 
 let desu_sig_of_type_ext ~options ~path type_ext = ([], [])
 
