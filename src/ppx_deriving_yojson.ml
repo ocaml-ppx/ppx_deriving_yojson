@@ -246,11 +246,11 @@ let ser_str_of_type ~options ~path ({ ptype_loc = loc } as type_decl) =
     | Ptype_abstract, None ->
       raise_errorf ~loc "%s cannot be derived for fully abstract types" deriver
     | Ptype_open, _        ->
-        let ref_name = Exp.ident (lid
-           (Ppx_deriving.mangle_type_decl (`Suffix "to_yojson_ref") type_decl))
-        in
+        let refname = Ppx_deriving.mangle_type_decl (`Suffix "to_yojson_ref") type_decl in
+        let refname_e = Exp.ident (lid refname) in
+        let getfield = Exp.field refname_e (lid refname) in
         let call =
-          app (Ppx_deriving.poly_apply_of_type_decl type_decl [%expr ![%e ref_name]])
+          app (Ppx_deriving.poly_apply_of_type_decl type_decl getfield)
            [[%expr x]]
         in
         [%expr fun x -> [%e call]]
@@ -263,10 +263,23 @@ let ser_str_of_type ~options ~path ({ ptype_loc = loc } as type_decl) =
   match type_decl.ptype_kind with
   | Ptype_open ->
       let ref_name = Ppx_deriving.mangle_type_decl (`Suffix "to_yojson_ref") type_decl in
+      let record_decl =
+         let poly_vars = List.rev
+          (Ppx_deriving.fold_type_decl (fun acc name -> name :: acc) [] type_decl)
+        in
+        let typ = Ppx_deriving.core_type_of_type_decl type_decl in
+        let polymorphize_ser  = Ppx_deriving.poly_arrow_of_type_decl
+          (fun var -> [%type: [%t var] -> Yojson.Safe.json]) type_decl
+        in
+        let ty = Typ.poly poly_vars (polymorphize_ser [%type: [%t typ] -> Yojson.Safe.json]) in
+        Type.mk ~kind: (Ptype_record [ Type.field ~mut: Mutable (mknoloc ref_name) ty ])
+          (mknoloc ref_name)
+      in
       let default_fun = [%expr fun _ -> assert false] in
       let poly_fun = polymorphize default_fun in
-      let r = Vb.mk (pvar ref_name) [%expr (ref [%e poly_fun])] in
-      [], [ r ; decl ]
+      let record = Exp.record [ lid ref_name, poly_fun] None in
+      let r = Vb.mk (pvar ref_name) record in
+      [record_decl], [ r ; decl ]
   | _ -> [], [decl]
 
 let ser_str_of_type_ext ~options ~path ({ ptyext_path = { loc }} as type_ext) =
@@ -292,15 +305,18 @@ let ser_str_of_type_ext ~options ~path ({ ptyext_path = { loc }} as type_ext) =
         in
         (pats @ [any_case]) |> Exp.function_
   in
-  let refname = Exp.ident (mknoloc
-     (Ppx_deriving.mangle_lid (`Suffix "to_yojson_ref") type_ext.ptyext_path.txt))
-  in
+  let refname = Ppx_deriving.mangle_lid (`Suffix "to_yojson_ref") type_ext.ptyext_path.txt in
+  let e_refname = Exp.ident (mknoloc refname) in
   let polymorphize = Ppx_deriving.poly_fun_of_type_ext type_ext in
   let serializer = polymorphize serializer in
+  let setfield = Exp.setfield e_refname (mknoloc refname) serializer in
+  let getfield = Exp.field e_refname (mknoloc refname) in
   ([],
-  [Vb.mk (Pat.any())
-    [%expr let fallback = ![%e refname] in [%e refname] := [%e serializer]]
+  [Vb.mk (Pat.var (mknoloc "set_to_yojson"))
+    [%expr let fallback = [%e getfield] in [%e setfield]]
   ])
+
+let error_or typ = [%type: [ `Ok of [%t typ] | `Error of string ]]
 
 let desu_str_of_type ~options ~path ({ ptype_loc = loc } as type_decl) =
   let is_strict = parse_options options in
@@ -352,15 +368,15 @@ let desu_str_of_type ~options ~path ({ ptype_loc = loc } as type_decl) =
     | Ptype_abstract, None ->
       raise_errorf ~loc "%s cannot be derived for fully abstract types" deriver
     | Ptype_open, _        ->
-        let ref_name = Exp.ident (lid
-           (Ppx_deriving.mangle_type_decl (`Suffix "of_yojson_ref") type_decl))
-        in
+        let refname = Ppx_deriving.mangle_type_decl (`Suffix "of_yojson_ref") type_decl in
+        let refname_e = Exp.ident (lid refname) in
+        let getfield = Exp.field refname_e (lid refname) in
         let call =
-          app (Ppx_deriving.poly_apply_of_type_decl type_decl [%expr ![%e ref_name]])
+          app (Ppx_deriving.poly_apply_of_type_decl type_decl getfield)
            [[%expr x]]
         in
         [%expr fun x -> [%e call]]
-          in
+  in
   let polymorphize = Ppx_deriving.poly_fun_of_type_decl type_decl in
   let decl =
     Vb.mk (pvar (Ppx_deriving.mangle_type_decl (`Suffix "of_yojson") type_decl))
@@ -369,10 +385,25 @@ let desu_str_of_type ~options ~path ({ ptype_loc = loc } as type_decl) =
   match type_decl.ptype_kind with
   | Ptype_open ->
       let ref_name = Ppx_deriving.mangle_type_decl (`Suffix "of_yojson_ref") type_decl in
+      let record_decl =
+         let poly_vars = List.rev
+          (Ppx_deriving.fold_type_decl (fun acc name -> name :: acc) [] type_decl)
+        in
+        let typ = Ppx_deriving.core_type_of_type_decl type_decl in
+        let polymorphize_desu = Ppx_deriving.poly_arrow_of_type_decl
+          (fun var -> [%type: Yojson.Safe.json -> [%t error_or var]]) type_decl in
+        let ty = Typ.poly poly_vars
+          (polymorphize_desu [%type: Yojson.Safe.json -> [%t error_or typ]])
+        in
+        Type.mk ~kind: (Ptype_record [ Type.field ~mut: Mutable (mknoloc ref_name) ty ])
+          (mknoloc ref_name)
+      in
       let default_fun = Exp.function_ [Exp.case [%pat? _] top_error] in
       let poly_fun = polymorphize default_fun in
-      let r = Vb.mk (pvar ref_name) [%expr (ref [%e poly_fun])] in
-      [], [ r ; decl ]
+      let record = Exp.record [ lid ref_name, poly_fun] None in
+      let r = Vb.mk (pvar ref_name) record in
+      [record_decl], [ r ; decl ]
+
   | _ -> [], [decl]
 
 let desu_str_of_type_ext ~options ~path ({ ptyext_path = { loc } } as type_ext) =
@@ -394,17 +425,18 @@ let desu_str_of_type_ext ~options ~path ({ ptyext_path = { loc } } as type_ext) 
     in
     (pats @ [any_case]) |> Exp.function_
   in
-  let refname = Exp.ident (mknoloc
-     (Ppx_deriving.mangle_lid (`Suffix "of_yojson_ref") type_ext.ptyext_path.txt))
-  in
+  let refname = Ppx_deriving.mangle_lid (`Suffix "of_yojson_ref") type_ext.ptyext_path.txt in
+  let e_refname = Exp.ident (mknoloc refname) in
   let polymorphize = Ppx_deriving.poly_fun_of_type_ext type_ext in
   let desurializer = polymorphize desurializer in
-  [],
-  [Vb.mk (Pat.any())
-      [%expr let fallback = ![%e refname] in [%e refname] := [%e wrap_runtime desurializer]]
-  ]
+  let setfield = Exp.setfield e_refname (mknoloc refname) (wrap_runtime desurializer) in
+  let getfield = Exp.field e_refname (mknoloc refname) in
+  ([],
+  [Vb.mk (Pat.var (mknoloc "set_of_yojson"))
+    [%expr let fallback = [%e getfield] in [%e setfield]]
+  ])
 
-let error_or typ = [%type: [ `Ok of [%t typ] | `Error of string ]]
+
 
 let ser_sig_of_type ~options ~path type_decl =
   ignore (parse_options options);
