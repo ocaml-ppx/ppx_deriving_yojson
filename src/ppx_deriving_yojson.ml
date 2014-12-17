@@ -266,8 +266,8 @@ let ser_str_of_type ~options ~path ({ ptype_loc = loc } as type_decl) =
       let default_fun = [%expr fun _ -> assert false] in
       let poly_fun = polymorphize default_fun in
       let r = Vb.mk (pvar ref_name) [%expr (ref [%e poly_fun])] in
-      [ r ; decl ]
-  | _ -> [decl]
+      [], [ r ; decl ]
+  | _ -> [], [decl]
 
 let ser_str_of_type_ext ~options ~path ({ ptyext_path = { loc }} as type_ext) =
   ignore (parse_options options);
@@ -297,9 +297,10 @@ let ser_str_of_type_ext ~options ~path ({ ptyext_path = { loc }} as type_ext) =
   in
   let polymorphize = Ppx_deriving.poly_fun_of_type_ext type_ext in
   let serializer = polymorphize serializer in
+  ([],
   [Vb.mk (Pat.any())
-     [%expr let fallback = ![%e refname] in [%e refname] := [%e serializer]]
-  ]
+    [%expr let fallback = ![%e refname] in [%e refname] := [%e serializer]]
+  ])
 
 let desu_str_of_type ~options ~path ({ ptype_loc = loc } as type_decl) =
   let is_strict = parse_options options in
@@ -371,8 +372,8 @@ let desu_str_of_type ~options ~path ({ ptype_loc = loc } as type_decl) =
       let default_fun = Exp.function_ [Exp.case [%pat? _] top_error] in
       let poly_fun = polymorphize default_fun in
       let r = Vb.mk (pvar ref_name) [%expr (ref [%e poly_fun])] in
-      [ r ; decl ]
-  | _ -> [decl]
+      [], [ r ; decl ]
+  | _ -> [], [decl]
 
 let desu_str_of_type_ext ~options ~path ({ ptyext_path = { loc } } as type_ext) =
   ignore(parse_options options);
@@ -398,6 +399,7 @@ let desu_str_of_type_ext ~options ~path ({ ptyext_path = { loc } } as type_ext) 
   in
   let polymorphize = Ppx_deriving.poly_fun_of_type_ext type_ext in
   let desurializer = polymorphize desurializer in
+  [],
   [Vb.mk (Pat.any())
       [%expr let fallback = ![%e refname] in [%e refname] := [%e wrap_runtime desurializer]]
   ]
@@ -409,66 +411,90 @@ let ser_sig_of_type ~options ~path type_decl =
   let typ = Ppx_deriving.core_type_of_type_decl type_decl in
   let polymorphize_ser  = Ppx_deriving.poly_arrow_of_type_decl
                             (fun var -> [%type: [%t var] -> Yojson.Safe.json]) type_decl in
-  [Sig.value (Val.mk (mknoloc (Ppx_deriving.mangle_type_decl (`Suffix "to_yojson") type_decl))
-              (polymorphize_ser  [%type: [%t typ] -> Yojson.Safe.json]))]
+  ([], [Sig.value (Val.mk (mknoloc (Ppx_deriving.mangle_type_decl (`Suffix "to_yojson") type_decl))
+              (polymorphize_ser  [%type: [%t typ] -> Yojson.Safe.json]))])
 
-let ser_sig_of_type_ext ~options ~path type_ext = []
+let ser_sig_of_type_ext ~options ~path type_ext = ([], [])
 
 let desu_sig_of_type ~options ~path type_decl =
   ignore (parse_options options);
   let typ = Ppx_deriving.core_type_of_type_decl type_decl in
   let polymorphize_desu = Ppx_deriving.poly_arrow_of_type_decl
                             (fun var -> [%type: Yojson.Safe.json -> [%t error_or var]]) type_decl in
+  ([],
   [Sig.value (Val.mk (mknoloc (Ppx_deriving.mangle_type_decl (`Suffix "of_yojson") type_decl))
-              (polymorphize_desu [%type: Yojson.Safe.json -> [%t error_or typ]]))]
+              (polymorphize_desu [%type: Yojson.Safe.json -> [%t error_or typ]]))])
 
-let desu_sig_of_type_ext ~options ~path type_ext = []
+let desu_sig_of_type_ext ~options ~path type_ext = ([], [])
 
 let str_of_type ~options ~path type_decl =
-  ser_str_of_type ~options ~path type_decl @ desu_str_of_type ~options ~path type_decl
+  let (ser_types, ser_vals) = ser_str_of_type ~options ~path type_decl in
+  let (desu_types, desu_vals) = desu_str_of_type ~options ~path type_decl in
+  (ser_types @ desu_types), (ser_vals @ desu_vals)
 
 let str_of_type_ext ~options ~path type_ext =
-  ser_str_of_type_ext ~options ~path type_ext @ desu_str_of_type_ext ~options ~path type_ext
+  let (ser_types, ser_vals) = ser_str_of_type_ext ~options ~path type_ext in
+  let (desu_types, desu_vals) = desu_str_of_type_ext ~options ~path type_ext in
+  (ser_types @ desu_types), (ser_vals @ desu_vals)
 
 let sig_of_type ~options ~path type_decl =
-  ser_sig_of_type ~options ~path type_decl @ desu_sig_of_type ~options ~path type_decl
+  let (ser_types, ser_vals) = ser_sig_of_type ~options ~path type_decl in
+  let (desu_types, desu_vals) = desu_sig_of_type ~options ~path type_decl in
+  (ser_types @ desu_types), (ser_vals @ desu_vals)
 
 let sig_of_type_ext ~options ~path type_ext =
-  ser_sig_of_type_ext ~options ~path type_ext @ desu_sig_of_type_ext ~options ~path type_ext
+  let (ser_types, ser_vals) = ser_sig_of_type_ext ~options ~path type_ext in
+  let (desu_types, desu_vals) = desu_sig_of_type_ext ~options ~path type_ext in
+  (ser_types @ desu_types), (ser_vals @ desu_vals)
+
+let structure f ~options ~path type_ =
+  let (types, vals) = f ~options ~path type_ in
+  let types = match types with
+    | [] -> []
+    | _ -> [ Str.type_ types ]
+  in
+  let vals = match vals with
+    | [] -> []
+    | _ -> [ Str.value ?loc: None Recursive vals ]
+  in
+  types @ vals
+
+let signature f ~options ~path type_ =
+  let (types, vals) = f ~options ~path type_ in
+  let types = match types with
+    | [] -> []
+    | _ -> [ Sig.type_ types ]
+  in
+  types @ vals
+
+let on_decls f ~options ~path type_decls =
+  let (types, vals) = List.split (List.map (f ~options ~path) type_decls) in
+  (List.concat types, List.concat vals)
 
 let () =
   Ppx_deriving.(register "yojson"
    (create
-    ~structure: (fun ~options ~path type_decls ->
-       [Str.value Recursive (List.concat (List.map (str_of_type ~options ~path) type_decls))])
-      ~structure_ext: (fun ~options ~path type_ext ->
-         [Str.value Recursive (str_of_type_ext ~options ~path type_ext)])
-      ~signature: (fun ~options ~path type_decls ->
-         List.concat (List.map (sig_of_type ~options ~path) type_decls))
-      ~signature_ext: sig_of_type_ext
+    ~structure: (structure (on_decls str_of_type))
+      ~structure_ext: (structure str_of_type_ext)
+      ~signature: (signature (on_decls sig_of_type))
+      ~signature_ext: (signature sig_of_type_ext)
       ()
    ));
   Ppx_deriving.(register "to_yojson"
    (create
     ~core_type: ser_expr_of_typ
-      ~structure: (fun ~options ~path type_decls ->
-         [Str.value Recursive (List.concat (List.map (ser_str_of_type ~options ~path) type_decls))])
-      ~structure_ext: (fun ~options ~path type_ext ->
-         [Str.value Recursive (ser_str_of_type_ext ~options ~path type_ext)])
-      ~signature: (fun ~options ~path type_decls ->
-         List.concat (List.map (ser_sig_of_type ~options ~path) type_decls))
-      ~signature_ext: ser_sig_of_type_ext
+    ~structure: (structure (on_decls ser_str_of_type))
+      ~structure_ext: (structure ser_str_of_type_ext)
+      ~signature: (signature (on_decls ser_sig_of_type))
+      ~signature_ext: (signature ser_sig_of_type_ext)
       ()
   ));
   Ppx_deriving.(register "of_yojson"
    (create
     ~core_type: (fun typ -> wrap_runtime (desu_expr_of_typ ~path:[] typ))
-      ~structure: (fun ~options ~path type_decls ->
-      [Str.value Recursive (List.concat (List.map (desu_str_of_type ~options ~path) type_decls))])
-      ~structure_ext: (fun ~options ~path type_ext ->
-         [Str.value Recursive (desu_str_of_type_ext ~options ~path type_ext)])
-      ~signature: (fun ~options ~path type_decls ->
-         List.concat (List.map (desu_sig_of_type ~options ~path) type_decls))
-      ~signature_ext: desu_sig_of_type_ext
+    ~structure: (structure (on_decls desu_str_of_type))
+      ~structure_ext: (structure desu_str_of_type_ext)
+      ~signature: (signature (on_decls desu_sig_of_type))
+      ~signature_ext: (signature desu_sig_of_type_ext)
       ()
   ))
