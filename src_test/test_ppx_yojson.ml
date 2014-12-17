@@ -220,6 +220,29 @@ let test_nostrict ctxt =
                (nostrict_of_yojson (`Assoc ["nostrict_field", (`Int 42);
                                             "some_other_field", (`Int 43)]))
 
+type 'a opentype = .. [@@deriving yojson]
+type 'a opentype += A of 'a | B of string list [@@deriving yojson]
+type 'a opentype += C of 'a opentype * float [@@deriving yojson]
+(*
+let test_opentype ctxt =
+  assert_roundtrip pp_pv pv_to_yojson pv_of_yojson
+                   `A "[\"A\"]";
+  assert_roundtrip pp_pv pv_to_yojson pv_of_yojson
+                   (`B 42) "[\"B\", 42]";
+  assert_roundtrip pp_pv pv_to_yojson pv_of_yojson
+                   (`C (42, "foo")) "[\"C\", 42, \"foo\"]";
+  assert_roundtrip pp_pvd pvd_to_yojson pvd_of_yojson
+                   `A "[\"A\"]";
+  assert_roundtrip pp_pvd pvd_to_yojson pvd_of_yojson
+                   `B "[\"B\"]";
+  assert_roundtrip pp_pvd pvd_to_yojson pvd_of_yojson
+                   (`C 1) "[\"C\", 1]";
+  assert_equal ~printer:(show_error_or pp_pvd)
+               (`Error "Test_ppx_yojson.pvd")
+               (pvd_of_yojson (`List [`String "D"]))
+*)
+let test_opentype ctxt = ()
+
 let suite = "Test ppx_yojson" >::: [
     "test_int"       >:: test_int;
     "test_float"     >:: test_float;
@@ -244,6 +267,7 @@ let suite = "Test ppx_yojson" >::: [
     "test_bidi"      >:: test_bidi;
     "test_shortcut"  >:: test_shortcut;
     "test_nostrict"  >:: test_nostrict;
+    "test_opentype" >:: test_opentype;
   ]
 
 let _ =
