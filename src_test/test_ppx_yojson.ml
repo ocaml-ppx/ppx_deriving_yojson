@@ -223,25 +223,25 @@ let test_nostrict ctxt =
 type 'a opentype = .. [@@deriving yojson]
 type 'a opentype += A of 'a | B of string list [@@deriving yojson]
 type 'a opentype += C of 'a opentype * float [@@deriving yojson]
-(*
+let rec pp_opentype f fmt = function
+  A x -> Format.fprintf fmt "A(%s)" (f x)
+| B l -> Format.fprintf fmt "B(%s)" (String.concat ", " l)
+| C (x, v) ->
+    Format.pp_print_string fmt "C(";
+    pp_opentype f fmt x;
+    Format.fprintf fmt ", %f)" v
+| _ -> assert false
+
 let test_opentype ctxt =
-  assert_roundtrip pp_pv pv_to_yojson pv_of_yojson
-                   `A "[\"A\"]";
-  assert_roundtrip pp_pv pv_to_yojson pv_of_yojson
-                   (`B 42) "[\"B\", 42]";
-  assert_roundtrip pp_pv pv_to_yojson pv_of_yojson
-                   (`C (42, "foo")) "[\"C\", 42, \"foo\"]";
-  assert_roundtrip pp_pvd pvd_to_yojson pvd_of_yojson
-                   `A "[\"A\"]";
-  assert_roundtrip pp_pvd pvd_to_yojson pvd_of_yojson
-                   `B "[\"B\"]";
-  assert_roundtrip pp_pvd pvd_to_yojson pvd_of_yojson
-                   (`C 1) "[\"C\", 1]";
-  assert_equal ~printer:(show_error_or pp_pvd)
-               (`Error "Test_ppx_yojson.pvd")
-               (pvd_of_yojson (`List [`String "D"]))
-*)
-let test_opentype ctxt = ()
+  let pp_ot = pp_opentype string_of_int in
+  let to_yojson = opentype_to_yojson i1_to_yojson in
+  let of_yojson = opentype_of_yojson i1_of_yojson in
+  assert_roundtrip pp_ot to_yojson of_yojson
+                   (A 0) "[\"A\", 0]";
+  assert_roundtrip pp_ot to_yojson of_yojson
+                   (B ["one"; "two"]) "[\"B\", [ \"one\", \"two\"] ]";
+  assert_roundtrip pp_ot to_yojson of_yojson
+                   (C (A 42, 1.2)) "[\"C\", [\"A\", 42], 1.2]"
 
 let suite = "Test ppx_yojson" >::: [
     "test_int"       >:: test_int;
@@ -267,7 +267,7 @@ let suite = "Test ppx_yojson" >::: [
     "test_bidi"      >:: test_bidi;
     "test_shortcut"  >:: test_shortcut;
     "test_nostrict"  >:: test_nostrict;
-    "test_opentype" >:: test_opentype;
+    "test_opentype"  >:: test_opentype;
   ]
 
 let _ =
