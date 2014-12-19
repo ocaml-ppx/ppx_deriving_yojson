@@ -210,59 +210,113 @@ let wrap_runtime decls =
 
 let ser_str_of_type ~options ~path ({ ptype_loc = loc } as type_decl) =
   ignore (parse_options options);
-  let serializer =
-    match type_decl.ptype_kind, type_decl.ptype_manifest with
-    | Ptype_abstract, Some manifest -> ser_expr_of_typ manifest
-    | Ptype_variant constrs, _ ->
-      constrs |>
-      List.map (fun { pcd_name = { txt = name' }; pcd_args; pcd_attributes } ->
-        let args = List.mapi (fun i typ -> app (ser_expr_of_typ typ) [evar (argn i)]) pcd_args in
-        let json_name = attr_name name' pcd_attributes in
-        let result =
-          match args with
-          | []   -> [%expr `List [`String [%e str json_name]]]
-          | args -> [%expr `List ((`String [%e str json_name]) :: [%e list args])]
-        in
-        Exp.case (pconstr name' (List.mapi (fun i _ -> pvar (argn i)) pcd_args)) result) |>
-      Exp.function_
-    | Ptype_record labels, _ ->
-      let fields =
-        labels |>
-        List.mapi (fun i { pld_name = { txt = name }; pld_type; pld_attributes } ->
-          let field  = Exp.field (evar "x") (mknoloc (Lident name)) in
-          let result = [%expr [%e str (attr_key name pld_attributes)],
-                              [%e ser_expr_of_typ pld_type] [%e field]] in
-          match attr_default pld_type.ptyp_attributes with
-          | None ->
-            [%expr [%e result] :: fields]
-          | Some default ->
-            [%expr if [%e field] = [%e default] then fields else [%e result] :: fields])
-      in
-      let assoc =
-        List.fold_left (fun expr field -> [%expr let fields = [%e field] in [%e expr]])
-          [%expr `Assoc fields] fields
-      in
-      [%expr fun x -> let fields = [] in [%e assoc]]
-    | Ptype_abstract, None ->
-      raise_errorf ~loc "%s cannot be derived for fully abstract types" deriver
-    | Ptype_open, _        ->
-        let refname = Ppx_deriving.mangle_type_decl (`Suffix "to_yojson_ref") type_decl in
-        let refname_e = Exp.ident (lid refname) in
-        let getfield = Exp.field refname_e (lid refname) in
-        let call =
-          app (Ppx_deriving.poly_apply_of_type_decl type_decl getfield)
-           [[%expr x]]
-        in
-        [%expr fun x -> [%e call]]
-  in
   let polymorphize = Ppx_deriving.poly_fun_of_type_decl type_decl in
-  let decl =
-    Vb.mk (pvar (Ppx_deriving.mangle_type_decl (`Suffix "to_yojson") type_decl))
-      (polymorphize [%expr ([%e serializer] : _ -> Yojson.Safe.json)])
-  in
   match type_decl.ptype_kind with
   | Ptype_open ->
-      let ref_name = Ppx_deriving.mangle_type_decl (`Suffix "to_yojson_ref") type_decl in
+      begin
+        let to_yojson_name = Ppx_deriving.mangle_type_decl (`Suffix "to_yojson") type_decl in
+        let extend_name = Ppx_deriving.mangle_type_decl
+          (`PrefixSuffix ("extend", "to_yojson")) type_decl
+        in
+        let funs =
+          match type_decl.ptype_manifest with
+          | Some ({ ptyp_desc = Ptyp_constr ({ txt = lid }, args) } as manifest) ->
+              let ser = ser_expr_of_typ manifest in
+              let lid = Ppx_deriving.mangle_lid (`PrefixSuffix ("extend", "to_yojson")) lid in
+              let extend_val = Exp.ident (mknoloc lid) in
+              tuple [ polymorphize [%expr ([%e ser] : _ -> Yojson.Safe.json)] ; extend_val ]
+          | Some _ ->
+              raise_errorf ~loc "%s: extensible type manifest should be a type name" deriver
+          | None ->
+              let poly_vars = List.rev
+                (Ppx_deriving.fold_type_decl (fun acc name -> name :: acc) [] type_decl)
+              in
+              let typ = Ppx_deriving.core_type_of_type_decl type_decl in
+              let polymorphize_ser  = Ppx_deriving.poly_arrow_of_type_decl
+                (fun var -> [%type: [%t var] -> Yojson.Safe.json]) type_decl
+              in
+              let ty = Typ.poly poly_vars (polymorphize_ser [%type: [%t typ] -> Yojson.Safe.json]) in
+              let default_fun = [%expr fun _ -> assert false] in
+              let poly_fun = polymorphize default_fun in
+              let poly_fun =
+                (Ppx_deriving.fold_type_decl (fun exp name -> Exp.newtype name exp) poly_fun type_decl)
+              in
+              [%expr let module M__toyojson = struct
+                       type t = { mutable f : [%t ty] }
+                       let t = let f : [%t ty] = [%e poly_fun] in { f }
+                     end in
+                     let to_ x = M__toyojson.t.M__toyojson.f x in
+                     let extend fn =
+                       let f : [%t ty] = fn M__toyojson.t.M__toyojson.f in
+                       M__toyojson.t.M__toyojson.f <- f
+                     in
+                     (to_, extend)]
+        in
+        [Vb.mk (ptuple [pvar to_yojson_name ; pvar extend_name]) funs]
+      end
+  | kind ->
+      let serializer =
+        match kind, type_decl.ptype_manifest with
+        | Ptype_open, _ -> assert false
+        | Ptype_abstract, Some manifest -> ser_expr_of_typ manifest
+        | Ptype_variant constrs, _ ->
+            constrs |>
+              List.map (fun { pcd_name = { txt = name' }; pcd_args; pcd_attributes } ->
+                 let args = List.mapi (fun i typ -> app (ser_expr_of_typ typ) [evar (argn i)]) pcd_args in
+                 let json_name = attr_name name' pcd_attributes in
+                 let result =
+                   match args with
+                   | []   -> [%expr `List [`String [%e str json_name]]]
+                   | args -> [%expr `List ((`String [%e str json_name]) :: [%e list args])]
+                 in
+                 Exp.case (pconstr name' (List.mapi (fun i _ -> pvar (argn i)) pcd_args)) result) |>
+              Exp.function_
+        | Ptype_record labels, _ ->
+            let fields =
+              labels |>
+                List.mapi (fun i { pld_name = { txt = name }; pld_type; pld_attributes } ->
+                   let field  = Exp.field (evar "x") (mknoloc (Lident name)) in
+                   let result = [%expr [%e str (attr_key name pld_attributes)],
+                       [%e ser_expr_of_typ pld_type] [%e field]] in
+                   match attr_default pld_type.ptyp_attributes with
+                   | None ->
+                       [%expr [%e result] :: fields]
+                   | Some default ->
+                       [%expr if [%e field] = [%e default] then fields else [%e result] :: fields])
+            in
+            let assoc =
+              List.fold_left (fun expr field -> [%expr let fields = [%e field] in [%e expr]])
+                [%expr `Assoc fields] fields
+            in
+            [%expr fun x -> let fields = [] in [%e assoc]]
+        | Ptype_abstract, None ->
+            raise_errorf ~loc "%s cannot be derived for fully abstract types" deriver
+      in
+      [
+        Vb.mk (pvar (Ppx_deriving.mangle_type_decl (`Suffix "to_yojson") type_decl))
+          (polymorphize [%expr ([%e serializer] : _ -> Yojson.Safe.json)])
+      ]
+
+(*
+  match type_decl.ptype_kind, type_decl.ptype_manifest with
+  | Ptype_open, Some manifest ->
+      begin
+        match manifest with
+        | { ptyp_desc = Ptyp_constr ({ txt = lid }, args) } ->
+            let extend_name = Ppx_deriving.mangle_type_decl
+              (`PrefixSuffix ("extend", "to_yojson")) type_decl
+            in
+            let lid = Ppx_deriving.mangle_lid (`PrefixSuffix ("extend", "to_yojson")) lid in
+            let extend_val = Vb.mk (pvar extend_name) (Exp.ident (mknoloc lid)) in
+            [], [decl ; extend_val]
+        | _ ->
+            raise_errorf ~loc "%s: extensible type manifest should be a type name" deriver
+      end
+  | Ptype_open, None ->
+      let ref_name = Ppx_deriving.mangle_type_decl (`Suffix "to_yojson") type_decl in
+      let extend_name = Ppx_deriving.mangle_type_decl
+        (`PrefixSuffix ("extend","to_yojson")) type_decl
+      in
       let record_decl =
          let poly_vars = List.rev
           (Ppx_deriving.fold_type_decl (fun acc name -> name :: acc) [] type_decl)
@@ -272,15 +326,16 @@ let ser_str_of_type ~options ~path ({ ptype_loc = loc } as type_decl) =
           (fun var -> [%type: [%t var] -> Yojson.Safe.json]) type_decl
         in
         let ty = Typ.poly poly_vars (polymorphize_ser [%type: [%t typ] -> Yojson.Safe.json]) in
-        Type.mk ~kind: (Ptype_record [ Type.field ~mut: Mutable (mknoloc ref_name) ty ])
-          (mknoloc ref_name)
+        Type.mk ~kind: (Ptype_record [ Type.field ~mut: Mutable (mknoloc extend_name) ty ])
+          (mknoloc extend_name)
       in
       let default_fun = [%expr fun _ -> assert false] in
       let poly_fun = polymorphize default_fun in
-      let record = Exp.record [ lid ref_name, poly_fun] None in
-      let r = Vb.mk (pvar ref_name) record in
-      [record_decl], [ r ; decl ]
-  | _ -> [], [decl]
+      let record = Exp.record [ lid extend_name, poly_fun] None in
+      let pair = [%expr (%e decl
+      let vals = Vb.mk (ptuple [pvar ref_name ; pvar extend_name]) record in
+      [record_decl], [ vals ]
+  | _ -> [], [decl]*)
 
 let ser_str_of_type_ext ~options ~path ({ ptyext_path = { loc }} as type_ext) =
   ignore (parse_options options);
@@ -305,16 +360,16 @@ let ser_str_of_type_ext ~options ~path ({ ptyext_path = { loc }} as type_ext) =
         in
         (pats @ [any_case]) |> Exp.function_
   in
-  let refname = Ppx_deriving.mangle_lid (`Suffix "to_yojson_ref") type_ext.ptyext_path.txt in
-  let e_refname = Exp.ident (mknoloc refname) in
+  let extname = Ppx_deriving.mangle_lid
+    (`PrefixSuffix ("extend", "to_yojson")) type_ext.ptyext_path.txt
+  in
   let polymorphize = Ppx_deriving.poly_fun_of_type_ext type_ext in
   let serializer = polymorphize serializer in
-  let setfield = Exp.setfield e_refname (mknoloc refname) serializer in
-  let getfield = Exp.field e_refname (mknoloc refname) in
-  ([],
-  [Vb.mk (Pat.var (mknoloc "set_to_yojson"))
-    [%expr let fallback = [%e getfield] in [%e setfield]]
-  ])
+  let serializer = Exp.fun_ "" None (pvar "fallback") serializer in
+  let e_extname = Exp.ident (mknoloc extname) in
+  [Vb.mk (Pat.var (mknoloc "_extend_to_yojson"))
+    [%expr [%e e_extname] [%e serializer]]
+  ]
 
 let error_or typ = [%type: [ `Ok of [%t typ] | `Error of string ]]
 
@@ -323,64 +378,116 @@ let desu_str_of_type ~options ~path ({ ptype_loc = loc } as type_decl) =
   let path = path @ [type_decl.ptype_name.txt] in
   let error path = [%expr `Error [%e str (String.concat "." path)]] in
   let top_error = error path in
-  let desurializer =
-    match type_decl.ptype_kind, type_decl.ptype_manifest with
-    | Ptype_abstract, Some manifest ->
-      desu_expr_of_typ ~path manifest
-    | Ptype_variant constrs, _ ->
-      List.map (fun { pcd_name = { txt = name' }; pcd_args; pcd_attributes } ->
-        Exp.case [%pat? `List ((`String [%p pstr (attr_name name' pcd_attributes)]) ::
-                          [%p plist (List.mapi (fun i _ -> pvar (argn i)) pcd_args)])]
+  let polymorphize = Ppx_deriving.poly_fun_of_type_decl type_decl in
+  match type_decl.ptype_kind with
+  | Ptype_open ->
+      begin
+        let of_yojson_name = Ppx_deriving.mangle_type_decl (`Suffix "of_yojson") type_decl in
+        let extend_name = Ppx_deriving.mangle_type_decl
+          (`PrefixSuffix ("extend", "of_yojson")) type_decl
+        in
+        let funs =
+          match type_decl.ptype_manifest with
+          | Some ({ ptyp_desc = Ptyp_constr ({ txt = lid }, args) } as manifest) ->
+              let desu = desu_expr_of_typ ~path manifest in
+              let lid = Ppx_deriving.mangle_lid (`PrefixSuffix ("extend", "of_yojson")) lid in
+              let extend_val = Exp.ident (mknoloc lid) in
+              let poly_desu = polymorphize [%expr ([%e wrap_runtime desu] : Yojson.Safe.json -> _)] in
+              tuple [ poly_desu ; extend_val ]
+          | Some _ ->
+              raise_errorf ~loc "%s: extensible type manifest should be a type name" deriver
+          | None ->
+              let poly_vars = List.rev
+                (Ppx_deriving.fold_type_decl (fun acc name -> name :: acc) [] type_decl)
+              in
+              let typ = Ppx_deriving.core_type_of_type_decl type_decl in
+              let polymorphize_desu = Ppx_deriving.poly_arrow_of_type_decl
+                (fun var -> [%type: Yojson.Safe.json -> [%t error_or var]]) type_decl in
+              let ty = Typ.poly poly_vars
+                (polymorphize_desu [%type: Yojson.Safe.json -> [%t error_or typ]])
+              in
+              let default_fun = Exp.function_ [Exp.case [%pat? _] top_error] in
+              let poly_fun = polymorphize default_fun in
+              let poly_fun =
+                (Ppx_deriving.fold_type_decl (fun exp name -> Exp.newtype name exp) poly_fun type_decl)
+              in
+              [%expr let module M__ofyojson = struct
+                       type t = { mutable f : [%t ty] }
+                       let t = let f : [%t ty] = [%e poly_fun] in { f }
+                     end in
+                     let of_ x = M__ofyojson.t.M__ofyojson.f x in
+                     let extend fn =
+                       let f : [%t ty] = fn M__ofyojson.t.M__ofyojson.f in
+                       M__ofyojson.t.M__ofyojson.f <- f
+                     in
+                     (of_, extend)]
+        in
+        [Vb.mk (ptuple [pvar of_yojson_name ; pvar extend_name]) funs]
+      end
+  | kind ->
+      let desurializer =
+        match kind, type_decl.ptype_manifest with
+        | Ptype_open, _ -> assert false
+        | Ptype_abstract, Some manifest ->
+            desu_expr_of_typ ~path manifest
+        | Ptype_variant constrs, _ ->
+            List.map (fun { pcd_name = { txt = name' }; pcd_args; pcd_attributes } ->
+               Exp.case [%pat? `List ((`String [%p pstr (attr_name name' pcd_attributes)]) ::
+                  [%p plist (List.mapi (fun i _ -> pvar (argn i)) pcd_args)])]
                  (desu_fold ~path (fun x -> constr name' x) pcd_args)) constrs @
-      [Exp.case [%pat? _] top_error] |>
-      Exp.function_
-    | Ptype_record labels, _ ->
-      let record =
-        List.fold_left (fun expr i ->
-            [%expr [%e evar (argn i)] >>= fun [%p pvar (argn i)] -> [%e expr]])
-          [%expr `Ok [%e Exp.record (labels |> List.mapi (fun i { pld_name = { txt = name } } ->
-                            mknoloc (Lident name), evar (argn i))) None]]
-          (labels |> List.mapi (fun i _ -> i))
+              [Exp.case [%pat? _] top_error] |>
+              Exp.function_
+        | Ptype_record labels, _ ->
+            let record =
+              List.fold_left (fun expr i ->
+                 [%expr [%e evar (argn i)] >>= fun [%p pvar (argn i)] -> [%e expr]])
+                [%expr `Ok [%e Exp.record (labels |> List.mapi (fun i { pld_name = { txt = name } } ->
+                        mknoloc (Lident name), evar (argn i))) None]]
+                (labels |> List.mapi (fun i _ -> i))
+            in
+            let default_case = if is_strict then top_error else [%expr loop xs _state] in
+            let cases =
+              (labels |> List.mapi (fun i { pld_name = { txt = name }; pld_type; pld_attributes } ->
+                  let path = path @ [name] in
+                  let thunks = labels |> List.mapi (fun j _ ->
+                       if i = j then app (desu_expr_of_typ ~path pld_type) [evar "x"] else evar (argn j)) in
+                  Exp.case [%pat? ([%p pstr (attr_key name pld_attributes)], x) :: xs]
+                    [%expr loop xs [%e tuple thunks]])) @
+                [Exp.case [%pat? []] record;
+                  Exp.case [%pat? _ :: xs] default_case]
+            and thunks =
+              labels |> List.map (fun { pld_name = { txt = name }; pld_type } ->
+                 match attr_default pld_type.ptyp_attributes with
+                 | None   -> error (path @ [name])
+                 | Some x -> [%expr `Ok [%e x]])
+            in
+            [%expr
+              function
+              | `Assoc xs ->
+                let rec loop xs ([%p ptuple (List.mapi (fun i _ -> pvar (argn i)) labels)] as _state) =
+                  [%e Exp.match_ [%expr xs] cases]
+                in loop xs [%e tuple thunks]
+              | _ -> [%e top_error]]
+        | Ptype_abstract, None ->
+            raise_errorf ~loc "%s cannot be derived for fully abstract types" deriver
       in
-      let default_case = if is_strict then top_error else [%expr loop xs _state] in
-      let cases =
-        (labels |> List.mapi (fun i { pld_name = { txt = name }; pld_type; pld_attributes } ->
-          let path = path @ [name] in
-          let thunks = labels |> List.mapi (fun j _ ->
-            if i = j then app (desu_expr_of_typ ~path pld_type) [evar "x"] else evar (argn j)) in
-          Exp.case [%pat? ([%p pstr (attr_key name pld_attributes)], x) :: xs]
-                   [%expr loop xs [%e tuple thunks]])) @
-        [Exp.case [%pat? []] record;
-         Exp.case [%pat? _ :: xs] default_case]
-      and thunks =
-        labels |> List.map (fun { pld_name = { txt = name }; pld_type } ->
-          match attr_default pld_type.ptyp_attributes with
-          | None   -> error (path @ [name])
-          | Some x -> [%expr `Ok [%e x]])
-      in
-      [%expr
-        function
-        | `Assoc xs ->
-          let rec loop xs ([%p ptuple (List.mapi (fun i _ -> pvar (argn i)) labels)] as _state) =
-            [%e Exp.match_ [%expr xs] cases]
-          in loop xs [%e tuple thunks]
-        | _ -> [%e top_error]]
-    | Ptype_abstract, None ->
-      raise_errorf ~loc "%s cannot be derived for fully abstract types" deriver
-    | Ptype_open, _        ->
-        let refname = Ppx_deriving.mangle_type_decl (`Suffix "of_yojson_ref") type_decl in
-        let refname_e = Exp.ident (lid refname) in
-        let getfield = Exp.field refname_e (lid refname) in
-        let call =
+      [Vb.mk (pvar (Ppx_deriving.mangle_type_decl (`Suffix "of_yojson") type_decl))
+        (polymorphize [%expr ([%e wrap_runtime desurializer] : Yojson.Safe.json -> _)])
+      ]
+
+(*
+  | Ptype_open, _        ->
+            let refname = Ppx_deriving.mangle_type_decl (`Suffix "of_yojson_ref") type_decl in
+            let refname_e = Exp.ident (lid refname) in
+            let getfield = Exp.field refname_e (lid refname) in
+            let call =
           app (Ppx_deriving.poly_apply_of_type_decl type_decl getfield)
            [[%expr x]]
         in
         [%expr fun x -> [%e call]]
   in
-  let polymorphize = Ppx_deriving.poly_fun_of_type_decl type_decl in
   let decl =
-    Vb.mk (pvar (Ppx_deriving.mangle_type_decl (`Suffix "of_yojson") type_decl))
-      (polymorphize [%expr ([%e wrap_runtime desurializer] : Yojson.Safe.json -> _)])
+
   in
   match type_decl.ptype_kind with
   | Ptype_open ->
@@ -405,7 +512,7 @@ let desu_str_of_type ~options ~path ({ ptype_loc = loc } as type_decl) =
       [record_decl], [ r ; decl ]
 
   | _ -> [], [decl]
-
+*)
 let desu_str_of_type_ext ~options ~path ({ ptyext_path = { loc } } as type_ext) =
   ignore(parse_options options);
   let desurializer =
@@ -425,16 +532,16 @@ let desu_str_of_type_ext ~options ~path ({ ptyext_path = { loc } } as type_ext) 
     in
     (pats @ [any_case]) |> Exp.function_
   in
-  let refname = Ppx_deriving.mangle_lid (`Suffix "of_yojson_ref") type_ext.ptyext_path.txt in
-  let e_refname = Exp.ident (mknoloc refname) in
+    let extname = Ppx_deriving.mangle_lid
+    (`PrefixSuffix ("extend", "of_yojson")) type_ext.ptyext_path.txt
+  in
   let polymorphize = Ppx_deriving.poly_fun_of_type_ext type_ext in
   let desurializer = polymorphize desurializer in
-  let setfield = Exp.setfield e_refname (mknoloc refname) (wrap_runtime desurializer) in
-  let getfield = Exp.field e_refname (mknoloc refname) in
-  ([],
-  [Vb.mk (Pat.var (mknoloc "set_of_yojson"))
-    [%expr let fallback = [%e getfield] in [%e setfield]]
-  ])
+  let desurializer = Exp.fun_ "" None (pvar "fallback") desurializer in
+  let e_extname = Exp.ident (mknoloc extname) in
+  [Vb.mk (Pat.var (mknoloc "_extend_of_yojson"))
+    [%expr [%e e_extname] [%e desurializer]]
+  ]
 
 let ser_sig_of_type ~options ~path type_decl =
   ignore (parse_options options);
@@ -447,25 +554,20 @@ let ser_sig_of_type ~options ~path type_decl =
   in
   match type_decl.ptype_kind with
     Ptype_open ->
-      let ref_name = Ppx_deriving.mangle_type_decl (`Suffix "to_yojson_ref") type_decl in
-      let record_decl =
-        let poly_vars = List.rev
-          (Ppx_deriving.fold_type_decl (fun acc name -> name :: acc) [] type_decl)
-        in
-        let typ = Ppx_deriving.core_type_of_type_decl type_decl in
-        let ty = Typ.poly poly_vars (polymorphize_ser [%type: [%t typ] -> Yojson.Safe.json]) in
-        Type.mk ~kind: (Ptype_record [ Type.field ~mut: Mutable (mknoloc ref_name) ty ])
-          (mknoloc ref_name)
+      let ext_name = Ppx_deriving.mangle_type_decl
+        (`PrefixSuffix ("extend", "to_yojson")) type_decl
       in
-      let val_record =
-        let typ = Typ.constr (lid ref_name) [] in
-        Sig.value ?loc: None (Val.mk (mknoloc ref_name) typ)
+      let poly_vars = List.rev
+        (Ppx_deriving.fold_type_decl (fun acc name -> name :: acc) [] type_decl)
       in
-      ([record_decl], [ val_record; to_yojson])
-  | _ -> ([], [to_yojson])
+      let typ = Ppx_deriving.core_type_of_type_decl type_decl in
+      let typ = Typ.poly poly_vars (polymorphize_ser [%type: [%t typ] -> Yojson.Safe.json]) in
+      let extend = Sig.value ?loc: None (Val.mk (mknoloc ext_name) typ) in
+      [ to_yojson ; extend ]
+  | _ -> [to_yojson]
 
 
-let ser_sig_of_type_ext ~options ~path type_ext = ([], [])
+let ser_sig_of_type_ext ~options ~path type_ext = []
 
 let desu_sig_of_type ~options ~path type_decl =
   ignore (parse_options options);
@@ -478,70 +580,48 @@ let desu_sig_of_type ~options ~path type_decl =
   in
   match type_decl.ptype_kind with
     Ptype_open ->
-      let ref_name = Ppx_deriving.mangle_type_decl (`Suffix "of_yojson_ref") type_decl in
-      let record_decl =
-        let poly_vars = List.rev
-          (Ppx_deriving.fold_type_decl (fun acc name -> name :: acc) [] type_decl)
-        in
-        let typ = Ppx_deriving.core_type_of_type_decl type_decl in
-        let ty = Typ.poly poly_vars
-          (polymorphize_desu [%type: Yojson.Safe.json -> [%t error_or typ]])
-        in
-        Type.mk ~kind: (Ptype_record [ Type.field ~mut: Mutable (mknoloc ref_name) ty ])
-          (mknoloc ref_name)
+      let ext_name = Ppx_deriving.mangle_type_decl
+        (`PrefixSuffix ("extend", "of_yojson")) type_decl
       in
-      let val_record =
-        let typ = Typ.constr (lid ref_name) [] in
-        Sig.value ?loc: None (Val.mk (mknoloc ref_name) typ)
+      let poly_vars = List.rev
+        (Ppx_deriving.fold_type_decl (fun acc name -> name :: acc) [] type_decl)
       in
-      ([record_decl], [val_record ; of_yojson])
-     | _ -> ([], [of_yojson])
+      let typ = Ppx_deriving.core_type_of_type_decl type_decl in
+      let typ = Typ.poly poly_vars
+        (polymorphize_desu [%type: Yojson.Safe.json -> [%t error_or typ]])
+      in
+      let extend = Sig.value ?loc: None (Val.mk (mknoloc ext_name) typ) in
+      [of_yojson ; extend ]
+     | _ -> [of_yojson]
 
-let desu_sig_of_type_ext ~options ~path type_ext = ([], [])
+let desu_sig_of_type_ext ~options ~path type_ext = []
 
 let str_of_type ~options ~path type_decl =
-  let (ser_types, ser_vals) = ser_str_of_type ~options ~path type_decl in
-  let (desu_types, desu_vals) = desu_str_of_type ~options ~path type_decl in
-  (ser_types @ desu_types), (ser_vals @ desu_vals)
+  (ser_str_of_type ~options ~path type_decl) @
+  (desu_str_of_type ~options ~path type_decl)
 
 let str_of_type_ext ~options ~path type_ext =
-  let (ser_types, ser_vals) = ser_str_of_type_ext ~options ~path type_ext in
-  let (desu_types, desu_vals) = desu_str_of_type_ext ~options ~path type_ext in
-  (ser_types @ desu_types), (ser_vals @ desu_vals)
+  (ser_str_of_type_ext ~options ~path type_ext) @
+  (desu_str_of_type_ext ~options ~path type_ext)
 
 let sig_of_type ~options ~path type_decl =
-  let (ser_types, ser_vals) = ser_sig_of_type ~options ~path type_decl in
-  let (desu_types, desu_vals) = desu_sig_of_type ~options ~path type_decl in
-  (ser_types @ desu_types), (ser_vals @ desu_vals)
+  (ser_sig_of_type ~options ~path type_decl) @
+  (desu_sig_of_type ~options ~path type_decl)
 
 let sig_of_type_ext ~options ~path type_ext =
-  let (ser_types, ser_vals) = ser_sig_of_type_ext ~options ~path type_ext in
-  let (desu_types, desu_vals) = desu_sig_of_type_ext ~options ~path type_ext in
-  (ser_types @ desu_types), (ser_vals @ desu_vals)
+  (ser_sig_of_type_ext ~options ~path type_ext) @
+  (desu_sig_of_type_ext ~options ~path type_ext)
 
 let structure f ~options ~path type_ =
-  let (types, vals) = f ~options ~path type_ in
-  let types = match types with
-    | [] -> []
-    | _ -> [ Str.type_ types ]
-  in
-  let vals = match vals with
+  let vals = f ~options ~path type_ in
+  match vals with
     | [] -> []
     | _ -> [ Str.value ?loc: None Recursive vals ]
-  in
-  types @ vals
 
-let signature f ~options ~path type_ =
-  let (types, vals) = f ~options ~path type_ in
-  let types = match types with
-    | [] -> []
-    | _ -> [ Sig.type_ types ]
-  in
-  types @ vals
+let signature f ~options ~path type_ = f ~options ~path type_
 
 let on_decls f ~options ~path type_decls =
-  let (types, vals) = List.split (List.map (f ~options ~path) type_decls) in
-  (List.concat types, List.concat vals)
+  List.concat (List.map (f ~options ~path) type_decls)
 
 let () =
   Ppx_deriving.(register "yojson"
