@@ -588,6 +588,7 @@ let ser_sig_of_type ~options ~path type_decl =
       in
       let typ = Ppx_deriving.core_type_of_type_decl type_decl in
       let typ = Typ.poly poly_vars (polymorphize_ser [%type: [%t typ] -> Yojson.Safe.json]) in
+      let typ = Typ.arrow "" typ (Typ.arrow "" typ (Typ.constr (lid "unit") [])) in
       let extend = Sig.value ?loc: None (Val.mk (mknoloc ext_name) typ) in
       [ to_yojson ; extend ]
   | _ -> [to_yojson]
@@ -616,6 +617,7 @@ let desu_sig_of_type ~options ~path type_decl =
       let typ = Typ.poly poly_vars
         (polymorphize_desu [%type: Yojson.Safe.json -> [%t error_or typ]])
       in
+      let typ = Typ.arrow "" typ (Typ.arrow "" typ (Typ.constr (lid "unit") [])) in
       let extend = Sig.value ?loc: None (Val.mk (mknoloc ext_name) typ) in
       [of_yojson ; extend ]
      | _ -> [of_yojson]
