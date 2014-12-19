@@ -256,7 +256,7 @@ let ser_str_of_type ~options ~path ({ ptype_loc = loc } as type_decl) =
             in
             let flid = lid (Printf.sprintf "%s.f" mod_name) in
             let set_field = Exp.setfield (Exp.ident flid) flid [%expr Obj.magic f] in
-            let field = Exp.ident (lid (Printf.sprintf "%s.f.%s.f" mod_name mod_name)) in
+            let field = Exp.field (Exp.ident flid) (flid) in
             let extend = Str.value Nonrecursive
               [Vb.mk (pvar extend_name) [%expr fun fn ->
                    let f (*: [%t ty]*) = fn [%e field] in
@@ -439,7 +439,7 @@ let desu_str_of_type ~options ~path ({ ptype_loc = loc } as type_decl) =
             in
             let flid = lid (Printf.sprintf "%s.f" mod_name) in
             let set_field = Exp.setfield (Exp.ident flid) flid [%expr Obj.magic f] in
-            let field = Exp.ident (lid (Printf.sprintf "%s.f.%s.f" mod_name mod_name)) in
+            let field = Exp.field (Exp.ident flid) flid in
             let extend = Str.value Nonrecursive
                 [Vb.mk (pvar extend_name) [%expr fun fn ->
                     let f (*: [%t ty]*) = fn [%e field] in
