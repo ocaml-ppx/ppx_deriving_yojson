@@ -703,29 +703,29 @@ let on_sig_decls f ~options ~path type_decls =
   List.concat (List.map (f ~options ~path) type_decls)
 
 let () =
-  Ppx_deriving.(register "yojson"
-   (create
-    ~structure: (structure (on_str_decls str_of_type))
-      ~structure_ext: (structure str_of_type_ext)
-      ~signature: (signature (on_sig_decls sig_of_type))
-      ~signature_ext: (signature sig_of_type_ext)
-      ()
+  Ppx_deriving.(register
+   (create "yojson"
+    ~type_decl_str: (structure (on_str_decls str_of_type))
+    ~type_ext_str: (structure str_of_type_ext)
+    ~type_decl_sig: (signature (on_sig_decls sig_of_type))
+    ~type_ext_sig: (signature sig_of_type_ext)
+    ()
    ));
-  Ppx_deriving.(register "to_yojson"
-   (create
+  Ppx_deriving.(register
+   (create "to_yojson"
     ~core_type: ser_expr_of_typ
-    ~structure: (structure (on_str_decls ser_str_of_type))
-      ~structure_ext: (structure ser_str_of_type_ext)
-      ~signature: (signature (on_sig_decls ser_sig_of_type))
-      ~signature_ext: (signature ser_sig_of_type_ext)
-      ()
+    ~type_decl_str: (structure (on_str_decls ser_str_of_type))
+    ~type_ext_str: (structure ser_str_of_type_ext)
+    ~type_decl_sig: (signature (on_sig_decls ser_sig_of_type))
+    ~type_ext_sig: (signature ser_sig_of_type_ext)
+    ()
   ));
-  Ppx_deriving.(register "of_yojson"
-   (create
+  Ppx_deriving.(register
+   (create "of_yojson"
     ~core_type: (fun typ -> wrap_runtime (desu_expr_of_typ ~path:[] typ))
-    ~structure: (structure (on_str_decls desu_str_of_type))
-      ~structure_ext: (structure desu_str_of_type_ext)
-      ~signature: (signature (on_sig_decls desu_sig_of_type))
-      ~signature_ext: (signature desu_sig_of_type_ext)
-      ()
+    ~type_decl_str: (structure (on_str_decls desu_str_of_type))
+    ~type_ext_str: (structure desu_str_of_type_ext)
+    ~type_decl_sig: (signature (on_sig_decls desu_sig_of_type))
+    ~type_ext_sig: (signature desu_sig_of_type_ext)
+    ()
   ))
