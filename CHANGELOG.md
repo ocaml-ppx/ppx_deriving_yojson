@@ -1,10 +1,14 @@
 Changelog
 =========
 
+2.2
+---
+
 2.1
 ---
 
   * Handle inheriting from a parametric polymorphic variant type.
+  * Don't leak type variables.
 
 2.0
 ---
