@@ -220,7 +220,11 @@ let test_nostrict ctxt =
                (nostrict_of_yojson (`Assoc ["nostrict_field", (`Int 42);
                                             "some_other_field", (`Int 43)]))
 
-module Opentype =
+module Opentype :
+  sig
+    type 'a opentype = .. [@@deriving yojson]
+    type 'a opentype += A of 'a | B of string list [@@deriving yojson]
+  end =
   struct
     type 'a opentype = .. [@@deriving yojson]
     type 'a opentype += A of 'a | B of string list [@@deriving yojson]
