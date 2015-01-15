@@ -359,8 +359,9 @@ let ser_str_of_type_ext ~options ~path ({ ptyext_path = { loc }} as type_ext) =
      [%e set_field]
     ]
   in
-  ([],
-   [Vb.mk (Pat.constraint_ (Pat.var (mknoloc "_extend_to_yojson")) (Typ.var "unit")) body])
+  [ Str.value ?loc: None Nonrecursive
+    [Vb.mk (Pat.var (mknoloc "()")) body]
+  ]
 
 let error_or typ = [%type: [ `Ok of [%t typ] | `Error of string ]]
 
@@ -518,8 +519,9 @@ let desu_str_of_type_ext ~options ~path ({ ptyext_path = { loc } } as type_ext) 
      [%e set_field]
     ]
   in
-  ([],
-   [Vb.mk (Pat.constraint_ (Pat.var (mknoloc "_extend_of_yojson")) (Typ.var "unit")) body])
+  [ Str.value ?loc: None Nonrecursive
+    [Vb.mk (Pat.var (mknoloc "()")) body]
+  ]
 
 let ser_sig_of_type ~options ~path type_decl =
   ignore (parse_options options);
@@ -606,9 +608,9 @@ let str_of_type ~options ~path type_decl =
   (ser_pre @ desu_pre, ser_vals @ desu_vals)
 
 let str_of_type_ext ~options ~path type_ext =
-  let (ser_pre, ser_vals) = ser_str_of_type_ext ~options ~path type_ext in
-  let (desu_pre, desu_vals) = desu_str_of_type_ext ~options ~path type_ext in
-  (ser_pre @ desu_pre, ser_vals @ desu_vals)
+  let ser_vals = ser_str_of_type_ext ~options ~path type_ext in
+  let desu_vals = desu_str_of_type_ext ~options ~path type_ext in
+  ser_vals @ desu_vals
 
 let sig_of_type ~options ~path type_decl =
   (ser_sig_of_type ~options ~path type_decl) @
@@ -624,8 +626,6 @@ let structure f ~options ~path type_ =
     | [] -> pre
     | _ -> pre @ [ Str.value ?loc: None Recursive vals ]
 
-let signature f ~options ~path type_ = f ~options ~path type_
-
 let on_str_decls f ~options ~path type_decls =
   let (pre, vals) = List.split (List.map (f ~options ~path) type_decls) in
   (List.concat pre, List.concat vals)
@@ -637,26 +637,26 @@ let () =
   Ppx_deriving.(register
    (create "yojson"
     ~type_decl_str: (structure (on_str_decls str_of_type))
-    ~type_ext_str: (structure str_of_type_ext)
-    ~type_decl_sig: (signature (on_sig_decls sig_of_type))
-    ~type_ext_sig: (signature sig_of_type_ext)
+    ~type_ext_str: str_of_type_ext
+    ~type_decl_sig: (on_sig_decls sig_of_type)
+    ~type_ext_sig: sig_of_type_ext
     ()
    ));
   Ppx_deriving.(register
    (create "to_yojson"
     ~core_type: ser_expr_of_typ
     ~type_decl_str: (structure (on_str_decls ser_str_of_type))
-    ~type_ext_str: (structure ser_str_of_type_ext)
-    ~type_decl_sig: (signature (on_sig_decls ser_sig_of_type))
-    ~type_ext_sig: (signature ser_sig_of_type_ext)
+    ~type_ext_str: ser_str_of_type_ext
+    ~type_decl_sig: (on_sig_decls ser_sig_of_type)
+    ~type_ext_sig: ser_sig_of_type_ext
     ()
   ));
   Ppx_deriving.(register
    (create "of_yojson"
     ~core_type: (fun typ -> wrap_runtime (desu_expr_of_typ ~path:[] typ))
     ~type_decl_str: (structure (on_str_decls desu_str_of_type))
-    ~type_ext_str: (structure desu_str_of_type_ext)
-    ~type_decl_sig: (signature (on_sig_decls desu_sig_of_type))
-    ~type_ext_sig: (signature desu_sig_of_type_ext)
+    ~type_ext_str: desu_str_of_type_ext
+    ~type_decl_sig: (on_sig_decls desu_sig_of_type)
+    ~type_ext_sig: desu_sig_of_type_ext
     ()
   ))
