@@ -360,7 +360,7 @@ let ser_str_of_type_ext ~options ~path ({ ptyext_path = { loc }} as type_ext) =
     ]
   in
   ([],
-   [Vb.mk (Pat.var (mknoloc "_extend_to_yojson")) body])
+   [Vb.mk (Pat.constraint_ (Pat.var (mknoloc "_extend_to_yojson")) (Typ.var "unit")) body])
 
 let error_or typ = [%type: [ `Ok of [%t typ] | `Error of string ]]
 
@@ -519,7 +519,7 @@ let desu_str_of_type_ext ~options ~path ({ ptyext_path = { loc } } as type_ext) 
     ]
   in
   ([],
-   [Vb.mk (Pat.var (mknoloc "_extend_of_yojson")) body])
+   [Vb.mk (Pat.constraint_ (Pat.var (mknoloc "_extend_of_yojson")) (Typ.var "unit")) body])
 
 let ser_sig_of_type ~options ~path type_decl =
   ignore (parse_options options);
