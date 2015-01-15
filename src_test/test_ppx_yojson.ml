@@ -220,6 +220,39 @@ let test_nostrict ctxt =
                (nostrict_of_yojson (`Assoc ["nostrict_field", (`Int 42);
                                             "some_other_field", (`Int 43)]))
 
+module Opentype :
+  sig
+    type 'a opentype = .. [@@deriving yojson]
+    type 'a opentype += A of 'a | B of string list [@@deriving yojson]
+  end =
+  struct
+    type 'a opentype = .. [@@deriving yojson]
+    type 'a opentype += A of 'a | B of string list [@@deriving yojson]
+  end
+type 'a Opentype.opentype +=
+  | C of 'a Opentype.opentype * float
+  | A = Opentype.A
+   [@@deriving yojson]
+let rec pp_opentype f fmt = function
+  A x -> Format.fprintf fmt "A(%s)" (f x)
+| Opentype.B l -> Format.fprintf fmt "B(%s)" (String.concat ", " l)
+| C (x, v) ->
+    Format.pp_print_string fmt "C(";
+    pp_opentype f fmt x;
+    Format.fprintf fmt ", %f)" v
+| _ -> assert false
+
+let test_opentype ctxt =
+  let pp_ot = pp_opentype string_of_int in
+  let to_yojson = Opentype.opentype_to_yojson i1_to_yojson in
+  let of_yojson = Opentype.opentype_of_yojson i1_of_yojson in
+  assert_roundtrip pp_ot to_yojson of_yojson
+                   (Opentype.A 0) "[\"A\", 0]";
+  assert_roundtrip pp_ot to_yojson of_yojson
+                   (Opentype.B ["one"; "two"]) "[\"B\", [ \"one\", \"two\"] ]";
+  assert_roundtrip pp_ot to_yojson of_yojson
+                   (C (Opentype.A 42, 1.2)) "[\"C\", [\"A\", 42], 1.2]"
+
 let suite = "Test ppx_yojson" >::: [
     "test_int"       >:: test_int;
     "test_float"     >:: test_float;
@@ -244,6 +277,7 @@ let suite = "Test ppx_yojson" >::: [
     "test_bidi"      >:: test_bidi;
     "test_shortcut"  >:: test_shortcut;
     "test_nostrict"  >:: test_nostrict;
+    "test_opentype"  >:: test_opentype;
   ]
 
 let _ =
