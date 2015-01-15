@@ -4,6 +4,8 @@ Changelog
 2.2
 ---
 
+  * Add support for open types.
+
 2.1
 ---
 
