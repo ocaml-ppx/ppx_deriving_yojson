@@ -229,9 +229,12 @@ module Opentype :
     type 'a opentype = .. [@@deriving yojson]
     type 'a opentype += A of 'a | B of string list [@@deriving yojson]
   end
-type 'a Opentype.opentype += C of 'a Opentype.opentype * float [@@deriving yojson]
+type 'a Opentype.opentype +=
+  | C of 'a Opentype.opentype * float
+  | A = Opentype.A
+   [@@deriving yojson]
 let rec pp_opentype f fmt = function
-  Opentype.A x -> Format.fprintf fmt "A(%s)" (f x)
+  A x -> Format.fprintf fmt "A(%s)" (f x)
 | Opentype.B l -> Format.fprintf fmt "B(%s)" (String.concat ", " l)
 | C (x, v) ->
     Format.pp_print_string fmt "C(";

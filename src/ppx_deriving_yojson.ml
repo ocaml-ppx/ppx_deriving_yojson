@@ -312,11 +312,14 @@ let ser_str_of_type ~options ~path ({ ptype_loc = loc } as type_decl) =
 let ser_str_of_type_ext ~options ~path ({ ptyext_path = { loc }} as type_ext) =
   ignore (parse_options options);
   let serializer =
-      type_ext.ptyext_constructors |>
-      List.map (fun { pext_name = { txt = name' }; pext_kind; pext_attributes } ->
-        match pext_kind with
-          Pext_rebind _ -> raise_errorf ~loc "%s does not handle constructor rebind yet" deriver
-        | Pext_decl (pext_args, _) ->
+    List.fold_right
+      (fun { pext_name = { txt = name' }; pext_kind; pext_attributes } acc_cases ->
+         match pext_kind with
+           Pext_rebind _ ->
+             (* nothing to do, since the constructor must be handled in original
+                constructor declaration *)
+             acc_cases
+         | Pext_decl (pext_args, _) ->
              let args = List.mapi (fun i typ -> app (ser_expr_of_typ typ) [evar (argn i)]) pext_args in
              let json_name = attr_name name' pext_attributes in
              let result =
@@ -324,7 +327,12 @@ let ser_str_of_type_ext ~options ~path ({ ptyext_path = { loc }} as type_ext) =
                | []   -> [%expr `List [`String [%e str json_name]]]
                | args -> [%expr `List ((`String [%e str json_name]) :: [%e list args])]
              in
-             Exp.case (pconstr name' (List.mapi (fun i _ -> pvar (argn i)) pext_args)) result) |>
+             let case =
+               Exp.case (pconstr name' (List.mapi (fun i _ -> pvar (argn i)) pext_args)) result
+             in
+             case :: acc_cases
+      )
+      type_ext.ptyext_constructors [] |>
       fun pats ->
         let any_case = Exp.case (Pat.var (mknoloc "x"))
           (app (Ppx_deriving.poly_apply_of_type_ext type_ext [%expr fallback])
@@ -468,14 +476,22 @@ let desu_str_of_type_ext ~options ~path ({ ptyext_path = { loc } } as type_ext) 
   ignore(parse_options options);
   let desurializer =
     let pats =
-      List.map (fun { pext_name = { txt = name' }; pext_kind; pext_attributes } ->
-         match pext_kind with
-           Pext_rebind _ -> raise_errorf ~loc "%s does not handle constructor rebind yet" deriver
-         | Pext_decl (pext_args, _) ->
-             Exp.case [%pat? `List ((`String [%p pstr (attr_name name' pext_attributes)]) ::
-                [%p plist (List.mapi (fun i _ -> pvar (argn i)) pext_args)])]
-               (desu_fold ~path (fun x -> constr name' x) pext_args))
-        type_ext.ptyext_constructors
+      List.fold_right
+        (fun { pext_name = { txt = name' }; pext_kind; pext_attributes } acc_cases ->
+           match pext_kind with
+             Pext_rebind _ ->
+               (* nothing to do since it must have been handled in the original
+                  constructor declaration *)
+               acc_cases
+           | Pext_decl (pext_args, _) ->
+               let case =
+                 Exp.case [%pat? `List ((`String [%p pstr (attr_name name' pext_attributes)]) ::
+                    [%p plist (List.mapi (fun i _ -> pvar (argn i)) pext_args)])]
+                   (desu_fold ~path (fun x -> constr name' x) pext_args)
+               in
+               case :: acc_cases
+        )
+        type_ext.ptyext_constructors []
     in
     let any_case = Exp.case (Pat.var (mknoloc "x"))
       (app (Ppx_deriving.poly_apply_of_type_ext type_ext [%expr fallback])
