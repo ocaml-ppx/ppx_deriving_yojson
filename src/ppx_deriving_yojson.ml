@@ -216,12 +216,12 @@ let ser_str_of_type ~options ~path ({ ptype_loc = loc } as type_decl) =
       begin
         let to_yojson_name = Ppx_deriving.mangle_type_decl (`Suffix "to_yojson") type_decl in
         let mod_name = Ppx_deriving.mangle_type_decl
-          (`PrefixSuffix ("M_", "to_yojson")) type_decl
+          (`PrefixSuffix ("M", "to_yojson")) type_decl
         in
         match type_decl.ptype_manifest with
         | Some ({ ptyp_desc = Ptyp_constr ({ txt = lid }, args) } as manifest) ->
             let ser = ser_expr_of_typ manifest in
-            let lid = Ppx_deriving.mangle_lid (`PrefixSuffix ("M_", "to_yojson")) lid in
+            let lid = Ppx_deriving.mangle_lid (`PrefixSuffix ("M", "to_yojson")) lid in
             let orig_mod = Mod.ident (mknoloc lid) in
             ([ Str.module_ (Mb.mk (mknoloc mod_name) orig_mod) ],
              [ Vb.mk (pvar to_yojson_name) (polymorphize [%expr ([%e ser] : _ -> Yojson.Safe.json)]) ]
@@ -249,9 +249,9 @@ let ser_str_of_type ~options ~path ({ ptype_loc = loc } as type_decl) =
             let poly_fun =
               (Ppx_deriving.fold_left_type_decl (fun exp name -> Exp.newtype name exp) poly_fun type_decl)
             in
-            let mod_name = "M__"^to_yojson_name in
+            let mod_name = "M_"^to_yojson_name in
             let typ = Type.mk ~kind: (Ptype_record
-               [ Type.field ~mut: Mutable (mknoloc "f") ty ]) (mknoloc "t__to_yojson")
+               [ Type.field ~mut: Mutable (mknoloc "f") ty ]) (mknoloc "t_to_yojson")
             in
             let record = Vb.mk (pvar "f") (Exp.record [ lid "f", poly_fun] None) in
             let modu =
@@ -335,7 +335,7 @@ let ser_str_of_type_ext ~options ~path ({ ptyext_path = { loc }} as type_ext) =
   let mod_name =
     let mod_lid =
       Ppx_deriving.mangle_lid
-        (`PrefixSuffix ("M_", "to_yojson")) type_ext.ptyext_path.txt
+        (`PrefixSuffix ("M", "to_yojson")) type_ext.ptyext_path.txt
     in
     String.concat "." (Longident.flatten mod_lid)
   in
@@ -367,12 +367,12 @@ let desu_str_of_type ~options ~path ({ ptype_loc = loc } as type_decl) =
       begin
         let of_yojson_name = Ppx_deriving.mangle_type_decl (`Suffix "of_yojson") type_decl in
         let mod_name = Ppx_deriving.mangle_type_decl
-          (`PrefixSuffix ("M_", "of_yojson")) type_decl
+          (`PrefixSuffix ("M", "of_yojson")) type_decl
         in
         match type_decl.ptype_manifest with
         | Some ({ ptyp_desc = Ptyp_constr ({ txt = lid }, args) } as manifest) ->
             let desu = desu_expr_of_typ ~path manifest in
-            let lid = Ppx_deriving.mangle_lid (`PrefixSuffix ("M_", "of_yojson")) lid in
+            let lid = Ppx_deriving.mangle_lid (`PrefixSuffix ("M", "of_yojson")) lid in
             let orig_mod = Mod.ident (mknoloc lid) in
             let poly_desu = polymorphize [%expr ([%e wrap_runtime desu] : Yojson.Safe.json -> _)] in
             ([ Str.module_ (Mb.mk (mknoloc mod_name) orig_mod)],
@@ -395,9 +395,9 @@ let desu_str_of_type ~options ~path ({ ptype_loc = loc } as type_decl) =
             let poly_fun =
               (Ppx_deriving.fold_left_type_decl (fun exp name -> Exp.newtype name exp) poly_fun type_decl)
             in
-            let mod_name = "M__"^of_yojson_name in
+            let mod_name = "M_"^of_yojson_name in
             let typ = Type.mk ~kind: (Ptype_record
-               [ Type.field ~mut: Mutable (mknoloc "f") ty ]) (mknoloc "t__of_yojson")
+               [ Type.field ~mut: Mutable (mknoloc "f") ty ]) (mknoloc "t_of_yojson")
             in
             let record = Vb.mk (pvar "f") (Exp.record [ lid "f", poly_fun] None) in
             let modu =
@@ -486,7 +486,7 @@ let desu_str_of_type_ext ~options ~path ({ ptyext_path = { loc } } as type_ext) 
   let mod_name =
     let mod_lid =
       Ppx_deriving.mangle_lid
-        (`PrefixSuffix ("M_", "of_yojson")) type_ext.ptyext_path.txt
+        (`PrefixSuffix ("M", "of_yojson")) type_ext.ptyext_path.txt
     in
     String.concat "." (Longident.flatten mod_lid)
   in
@@ -517,7 +517,7 @@ let ser_sig_of_type ~options ~path type_decl =
   match type_decl.ptype_kind with
     Ptype_open ->
       let mod_name = Ppx_deriving.mangle_type_decl
-        (`PrefixSuffix ("M_", "to_yojson")) type_decl
+        (`PrefixSuffix ("M", "to_yojson")) type_decl
       in
       let poly_vars = List.rev
         (Ppx_deriving.fold_left_type_decl (fun acc name -> name :: acc) [] type_decl)
@@ -528,9 +528,9 @@ let ser_sig_of_type ~options ~path type_decl =
       in
       let ty = Typ.poly poly_vars (polymorphize_ser [%type: [%t typ] -> Yojson.Safe.json]) in
       let typ = Type.mk ~kind: (Ptype_record
-         [ Type.field ~mut: Mutable (mknoloc "f") ty ]) (mknoloc "t__to_yojson")
+         [ Type.field ~mut: Mutable (mknoloc "f") ty ]) (mknoloc "t_to_yojson")
       in
-      let record = Val.mk (mknoloc "f") (Typ.constr (lid "t__to_yojson") []) in
+      let record = Val.mk (mknoloc "f") (Typ.constr (lid "t_to_yojson") []) in
       let modu =
         Sig.module_ (Md.mk (mknoloc mod_name) (Mty.signature
           [
@@ -556,7 +556,7 @@ let desu_sig_of_type ~options ~path type_decl =
   match type_decl.ptype_kind with
     Ptype_open ->
       let mod_name = Ppx_deriving.mangle_type_decl
-        (`PrefixSuffix ("M_", "of_yojson")) type_decl
+        (`PrefixSuffix ("M", "of_yojson")) type_decl
       in
       let poly_vars = List.rev
         (Ppx_deriving.fold_left_type_decl (fun acc name -> name :: acc) [] type_decl)
@@ -568,9 +568,9 @@ let desu_sig_of_type ~options ~path type_decl =
         (polymorphize_desu [%type: Yojson.Safe.json -> [%t error_or typ]])
       in
       let typ = Type.mk ~kind: (Ptype_record
-         [ Type.field ~mut: Mutable (mknoloc "f") ty ]) (mknoloc "t__of_yojson")
+         [ Type.field ~mut: Mutable (mknoloc "f") ty ]) (mknoloc "t_of_yojson")
       in
-      let record = Val.mk (mknoloc "f") (Typ.constr (lid "t__of_yojson") []) in
+      let record = Val.mk (mknoloc "f") (Typ.constr (lid "t_of_yojson") []) in
       let modu =
         Sig.module_ (Md.mk (mknoloc mod_name) (Mty.signature
           [
