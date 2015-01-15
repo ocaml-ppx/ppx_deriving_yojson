@@ -19,7 +19,7 @@ build-test: [
 ]
 depends: [
   "yojson"
-  "ppx_deriving" {>= "2.0"}
+  "ppx_deriving" {>= "2.0" & < "3.0"}
   "ocamlfind"    {build}
   "ounit"        {test}
   "ppx_import"   {test}
