@@ -38,6 +38,9 @@ let parse_options options =
     | _ -> raise_errorf ~loc:expr.pexp_loc "%s does not support option %s" deriver name);
   !strict
 
+let wrap_runtime decls =
+  [%expr let open Ppx_deriving_yojson_runtime in [%e decls]]
+
 let rec ser_expr_of_typ typ =
   let attr_int_encoding typ =
     match attr_int_encoding typ with `String -> "String" | `Int -> "Intlit"
@@ -205,9 +208,6 @@ and desu_expr_of_typ ~path typ =
     raise_errorf ~loc:ptyp_loc "%s cannot be derived for %s"
                  deriver (Ppx_deriving.string_of_core_type typ)
 
-let wrap_runtime decls =
-  [%expr let open Ppx_deriving_yojson_runtime in [%e decls]]
-
 let ser_str_of_type ~options ~path ({ ptype_loc = loc } as type_decl) =
   ignore (parse_options options);
   let polymorphize = Ppx_deriving.poly_fun_of_type_decl type_decl in
@@ -306,7 +306,7 @@ let ser_str_of_type ~options ~path ({ ptype_loc = loc } as type_decl) =
       in
       ([],
        [Vb.mk (pvar (Ppx_deriving.mangle_type_decl (`Suffix "to_yojson") type_decl))
-          (polymorphize [%expr ([%e serializer] : _ -> Yojson.Safe.json)])
+          (polymorphize [%expr ([%e wrap_runtime serializer] : _ -> Yojson.Safe.json)])
        ])
 
 let ser_str_of_type_ext ~options ~path ({ ptyext_path = { loc }} as type_ext) =

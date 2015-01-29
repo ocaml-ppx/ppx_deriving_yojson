@@ -253,6 +253,28 @@ let test_opentype ctxt =
   assert_roundtrip pp_ot to_yojson of_yojson
                    (C (Opentype.A 42, 1.2)) "[\"C\", [\"A\", 42], 1.2]"
 
+
+module TestShadowing = struct
+  module List = struct
+    let map () = ()
+  end
+
+  type t = int list [@@deriving yojson]
+
+  module Array = struct
+    let to_list () = ()
+  end
+
+  module Bytes = struct
+    let to_string () = ()
+  end
+
+  type v = bytes [@@deriving yojson]
+
+end
+
+
+
 let suite = "Test ppx_yojson" >::: [
     "test_int"       >:: test_int;
     "test_float"     >:: test_float;
