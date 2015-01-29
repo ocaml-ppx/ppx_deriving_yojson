@@ -3,7 +3,7 @@ build:
 	ocaml pkg/build.ml native=true native-dynlink=true
 
 test: build
-	rm _build/src_test/ -rf
+	rm -rf _build/src_test/
 	ocamlbuild -j 0 -use-ocamlfind -classic-display \
 						 src_test/test_ppx_yojson.byte --
 
