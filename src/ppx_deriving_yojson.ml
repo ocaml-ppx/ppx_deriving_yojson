@@ -348,7 +348,7 @@ let ser_str_of_type_ext ~options ~path ({ ptyext_path = { loc }} as type_ext) =
     String.concat "." (Longident.flatten mod_lid)
   in
   let polymorphize = Ppx_deriving.poly_fun_of_type_ext type_ext in
-  let serializer = polymorphize serializer in
+  let serializer = polymorphize (wrap_runtime serializer) in
 
   let flid = lid (Printf.sprintf "%s.f" mod_name) in
   let set_field = Exp.setfield (Exp.ident flid) flid serializer in
