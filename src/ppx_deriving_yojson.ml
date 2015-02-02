@@ -38,9 +38,6 @@ let parse_options options =
     | _ -> raise_errorf ~loc:expr.pexp_loc "%s does not support option %s" deriver name);
   !strict
 
-let wrap_runtime decls =
-  [%expr let open Ppx_deriving_yojson_runtime in [%e decls]]
-
 let rec ser_expr_of_typ typ =
   let attr_int_encoding typ =
     match attr_int_encoding typ with `String -> "String" | `Int -> "Intlit"
@@ -207,6 +204,9 @@ and desu_expr_of_typ ~path typ =
   | { ptyp_loc } ->
     raise_errorf ~loc:ptyp_loc "%s cannot be derived for %s"
                  deriver (Ppx_deriving.string_of_core_type typ)
+
+let wrap_runtime decls =
+  [%expr let open Ppx_deriving_yojson_runtime in [%e decls]]
 
 let ser_str_of_type ~options ~path ({ ptype_loc = loc } as type_decl) =
   ignore (parse_options options);
