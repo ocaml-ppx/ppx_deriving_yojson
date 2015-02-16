@@ -68,6 +68,17 @@ let test_int ctxt =
                    42L "\"42\"";
   assert_roundtrip pp_i9 i9_to_yojson i9_of_yojson
                    42n "\"42\""
+
+let test_int_edge ctxt =
+  assert_roundtrip pp_i2 i2_to_yojson i2_of_yojson
+                   0x7fffffffl "2147483647";
+  assert_roundtrip pp_i2 i2_to_yojson i2_of_yojson
+                   (Int32.neg 0x80000000l) "-2147483648";
+  assert_roundtrip pp_i4 i4_to_yojson i4_of_yojson
+                   0x7fffffffffffffffL "9223372036854775807";
+  assert_roundtrip pp_i4 i4_to_yojson i4_of_yojson
+                   (Int64.neg 0x8000000000000000L) "-9223372036854775808"
+
 let test_float ctxt =
   assert_roundtrip pp_f f_to_yojson f_of_yojson
                    1.0 "1.0"
@@ -277,6 +288,7 @@ end
 
 let suite = "Test ppx_yojson" >::: [
     "test_int"       >:: test_int;
+    "test_int_edge"  >:: test_int_edge;
     "test_float"     >:: test_float;
     "test_bool"      >:: test_bool;
     "test_char"      >:: test_char;
