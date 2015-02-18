@@ -360,7 +360,7 @@ let ser_str_of_type_ext ~options ~path ({ ptyext_path = { loc }} as type_ext) =
     ]
   in
   [ Str.value ?loc: None Nonrecursive
-    [Vb.mk (Pat.var (mknoloc "()")) body]
+    [Vb.mk (Pat.construct (lid "()") None) body]
   ]
 
 let error_or typ = [%type: [ `Ok of [%t typ] | `Error of string ]]
@@ -520,7 +520,7 @@ let desu_str_of_type_ext ~options ~path ({ ptyext_path = { loc } } as type_ext) 
     ]
   in
   [ Str.value ?loc: None Nonrecursive
-    [Vb.mk (Pat.var (mknoloc "()")) body]
+    [Vb.mk (Pat.construct (lid "()") None) body]
   ]
 
 let ser_sig_of_type ~options ~path type_decl =
