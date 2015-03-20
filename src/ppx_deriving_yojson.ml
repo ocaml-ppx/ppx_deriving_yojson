@@ -206,7 +206,7 @@ and desu_expr_of_typ ~path typ =
                  deriver (Ppx_deriving.string_of_core_type typ)
 
 let wrap_runtime decls =
-  [%expr (let open Ppx_deriving_yojson_runtime in [%e decls]) [@ocaml.warning "-33"]]
+  [%expr let open! Ppx_deriving_yojson_runtime in [%e decls]]
 
 let ser_str_of_type ~options ~path ({ ptype_loc = loc } as type_decl) =
   ignore (parse_options options);
