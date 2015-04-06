@@ -285,6 +285,19 @@ module TestShadowing = struct
 end
 
 
+module Test_recursive_polyvariant = struct
+  (* Regression test for 
+     https://github.com/whitequark/ppx_deriving_yojson/issues/24 *)
+  type a = [ `B of string ] 
+      [@@deriving of_yojson]
+  type b = [a | `C of b list]
+      [@@deriving of_yojson]
+  type c = [ a | b | `D of b list]
+      [@@deriving of_yojson]
+  let c_of_yojson yj : [ `Ok of c | `Error of string ] = c_of_yojson yj
+end
+
+
 
 let suite = "Test ppx_yojson" >::: [
     "test_int"       >:: test_int;
