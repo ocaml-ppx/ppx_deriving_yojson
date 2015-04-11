@@ -31,8 +31,8 @@ _deriving yojson_ generates two functions per type:
 ``` ocaml
 # #require "ppx_deriving";;
 # type ty = .. [@@deriving yojson];;
-val ty_of_yojson : Yojson.Safe.json -> [ `Ok of ty | `Error of string ]
-val ty_to_yojson : ty -> Yojson.Safe.json
+val ty_of_yojson : Yojson.Basic.json -> [ `Ok of ty | `Error of string ]
+val ty_to_yojson : ty -> Yojson.Basic.json
 ```
 
 When the deserializing function returns <code>\`Error loc</code>, `loc` points to the point in the JSON hierarchy where the error has occurred.
@@ -57,7 +57,7 @@ The following table summarizes the correspondence between OCaml types and JSON v
 | `ref`                  | 'a         |                                  |
 | `option`               | Null or 'a |                                  |
 | A record               | Object     |                                  |
-| `Yojson.Safe.json`     | any        | Identity transformation          |
+| `Yojson.Basic.json`     | any        | Identity transformation          |
 
 Variants (regular and polymorphic) are represented using arrays; the first element is a string with the name of the constructor, the rest are the arguments. Note that the implicit tuple in a polymorphic variant is flattened. For example:
 
@@ -65,9 +65,9 @@ Variants (regular and polymorphic) are represented using arrays; the first eleme
 # type pvs = [ `A | `B of int | `C of int * string ] list [@@deriving yojson];;
 # type v = A | B of int | C of int * string [@@deriving yojson];;
 # type vs = v list [@@deriving yojson];;
-# print_endline (Yojson.Safe.to_string (vs_to_yojson [A; B 42; C (42, "foo")]));;
+# print_endline (Yojson.Basic.to_string (vs_to_yojson [A; B 42; C (42, "foo")]));;
 [["A"],["B",42],["C",42,"foo"]]
-# print_endline (Yojson.Safe.to_string (pvs_to_yojson [`A; `B 42; `C (42, "foo")]));;
+# print_endline (Yojson.Basic.to_string (pvs_to_yojson [`A; `B 42; `C (42, "foo")]));;
 [["A"],["B",42],["C",42,"foo"]]
 ```
 

@@ -1,16 +1,16 @@
 open OUnit2
 
-type json = [%import: Yojson.Safe.json] [@@deriving show]
+type json = [%import: Yojson.Basic.json] [@@deriving show]
 type 'a error_or = [ `Ok of 'a | `Error of string ] [@@deriving show]
 
 let assert_roundtrip pp_obj to_json of_json obj str =
-  let json = Yojson.Safe.from_string str in
-  let cleanup json = Yojson.Safe.(json |> to_string |> from_string) in
+  let json = Yojson.Basic.from_string str in
+  let cleanup json = Yojson.Basic.(json |> to_string |> from_string) in
   assert_equal ~printer:show_json json (cleanup (to_json obj));
   assert_equal ~printer:(show_error_or pp_obj) (`Ok obj) (of_json json)
 
 let assert_failure pp_obj of_json err str =
-  let json = Yojson.Safe.from_string str in
+  let json = Yojson.Basic.from_string str in
   assert_equal ~printer:(show_error_or pp_obj) (`Error err) (of_json json)
 
 type i1 = int         [@@deriving show, yojson]
@@ -177,7 +177,7 @@ let test_field_err ctxt =
                (`Error "Test_ppx_yojson.geo.lat")
                (geo_of_yojson (`Assoc ["Longitude", (`Float 42.0)]))
 
-type id = Yojson.Safe.json [@@deriving yojson]
+type id = Yojson.Basic.json [@@deriving yojson]
 let test_id ctxt =
   assert_roundtrip pp_json id_to_yojson id_of_yojson
                    (`Int 42) "42"
