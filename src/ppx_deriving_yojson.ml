@@ -119,7 +119,10 @@ and desu_expr_of_typ ~path typ =
   let decode pat exp = decode' [pat, exp] in
   match typ with
   | [%type: int]    -> decode [%pat? `Int x]    [%expr `Ok x]
-  | [%type: float]  -> decode [%pat? `Float x]  [%expr `Ok x]
+  | [%type: float]  ->
+    decode' [[%pat? `Int x],    [%expr `Ok (float_of_int x)];
+             [%pat? `Intlit x], [%expr `Ok (float_of_string x)];
+             [%pat? `Float x],  [%expr `Ok x]]
   | [%type: bool]   -> decode [%pat? `Bool x]   [%expr `Ok x]
   | [%type: string] -> decode [%pat? `String x] [%expr `Ok x]
   | [%type: bytes]  -> decode [%pat? `String x] [%expr `Ok (Bytes.of_string x)]

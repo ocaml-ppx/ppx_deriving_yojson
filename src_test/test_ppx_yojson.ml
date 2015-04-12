@@ -81,7 +81,10 @@ let test_int_edge ctxt =
 
 let test_float ctxt =
   assert_roundtrip pp_f f_to_yojson f_of_yojson
-                   1.0 "1.0"
+                   1.0 "1.0";
+  assert_equal ~printer:(show_error_or pp_f)
+               (`Ok 1.0)
+               (f_of_yojson (`Int 1))
 
 let test_bool ctxt =
   assert_roundtrip pp_b b_to_yojson b_of_yojson
@@ -286,9 +289,9 @@ end
 
 
 module Test_recursive_polyvariant = struct
-  (* Regression test for 
+  (* Regression test for
      https://github.com/whitequark/ppx_deriving_yojson/issues/24 *)
-  type a = [ `B of string ] 
+  type a = [ `B of string ]
       [@@deriving of_yojson]
   type b = [a | `C of b list]
       [@@deriving of_yojson]
