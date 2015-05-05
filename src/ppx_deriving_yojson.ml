@@ -215,6 +215,7 @@ let wrap_runtime decls =
 let ser_str_of_type ~options ~path ({ ptype_loc = loc } as type_decl) =
   ignore (parse_options options);
   let polymorphize = Ppx_deriving.poly_fun_of_type_decl type_decl in
+  let typ = Ppx_deriving.core_type_of_type_decl type_decl in
   match type_decl.ptype_kind with
   | Ptype_open ->
       begin
@@ -228,7 +229,7 @@ let ser_str_of_type ~options ~path ({ ptype_loc = loc } as type_decl) =
             let lid = Ppx_deriving.mangle_lid (`PrefixSuffix ("M", "to_yojson")) lid in
             let orig_mod = Mod.ident (mknoloc lid) in
             ([ Str.module_ (Mb.mk (mknoloc mod_name) orig_mod) ],
-             [ Vb.mk (pvar to_yojson_name) (polymorphize [%expr ([%e ser] : _ -> Yojson.Safe.json)]) ]
+             [ Vb.mk (pvar to_yojson_name) (polymorphize [%expr ([%e ser] : [%t typ] -> Yojson.Safe.json)]) ]
             )
         | Some _ ->
             raise_errorf ~loc "%s: extensible type manifest should be a type name" deriver
@@ -236,7 +237,6 @@ let ser_str_of_type ~options ~path ({ ptype_loc = loc } as type_decl) =
             let poly_vars = List.rev
                 (Ppx_deriving.fold_left_type_decl (fun acc name -> name :: acc) [] type_decl)
             in
-            let typ = Ppx_deriving.core_type_of_type_decl type_decl in
             let polymorphize_ser  = Ppx_deriving.poly_arrow_of_type_decl
               (fun var -> [%type: [%t var] -> Yojson.Safe.json]) type_decl
             in
@@ -310,7 +310,7 @@ let ser_str_of_type ~options ~path ({ ptype_loc = loc } as type_decl) =
       in
       ([],
        [Vb.mk (pvar (Ppx_deriving.mangle_type_decl (`Suffix "to_yojson") type_decl))
-          (polymorphize [%expr ([%e wrap_runtime serializer] : _ -> Yojson.Safe.json)])
+          (polymorphize [%expr ([%e wrap_runtime serializer] : [%t typ] -> Yojson.Safe.json)])
        ])
 
 let ser_str_of_type_ext ~options ~path ({ ptyext_path = { loc }} as type_ext) =
@@ -375,6 +375,7 @@ let desu_str_of_type ~options ~path ({ ptype_loc = loc } as type_decl) =
   let error path = [%expr `Error [%e str (String.concat "." path)]] in
   let top_error = error path in
   let polymorphize = Ppx_deriving.poly_fun_of_type_decl type_decl in
+  let typ = Ppx_deriving.core_type_of_type_decl type_decl in
   match type_decl.ptype_kind with
   | Ptype_open ->
       begin
@@ -397,7 +398,6 @@ let desu_str_of_type ~options ~path ({ ptype_loc = loc } as type_decl) =
             let poly_vars = List.rev
               (Ppx_deriving.fold_left_type_decl (fun acc name -> name :: acc) [] type_decl)
             in
-            let typ = Ppx_deriving.core_type_of_type_decl type_decl in
             let polymorphize_desu = Ppx_deriving.poly_arrow_of_type_decl
               (fun var -> [%type: Yojson.Safe.json -> [%t error_or var]]) type_decl in
             let ty = Typ.poly poly_vars
@@ -474,7 +474,7 @@ let desu_str_of_type ~options ~path ({ ptype_loc = loc } as type_decl) =
       in
       ([],
        [Vb.mk (pvar (Ppx_deriving.mangle_type_decl (`Suffix "of_yojson") type_decl))
-        (polymorphize [%expr ([%e wrap_runtime desurializer] : Yojson.Safe.json -> _)])
+        (polymorphize [%expr ([%e wrap_runtime desurializer] : Yojson.Safe.json -> [%t error_or typ])])
        ])
 
 let desu_str_of_type_ext ~options ~path ({ ptyext_path = { loc } } as type_ext) =

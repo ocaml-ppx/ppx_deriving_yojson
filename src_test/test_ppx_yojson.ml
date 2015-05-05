@@ -267,6 +267,37 @@ let test_opentype ctxt =
   assert_roundtrip pp_ot to_yojson of_yojson
                    (C (Opentype.A 42, 1.2)) "[\"C\", [\"A\", 42], 1.2]"
 
+module Warnings = struct
+
+  module W34 = struct
+
+    [@@@ocaml.warning "@34"]
+
+
+    module M1 : sig type u [@@deriving yojson] end = struct
+      type internal = int list [@@deriving yojson]
+      type u = int list    [@@deriving yojson]
+    end
+(* the deriver for type [u] supposedly use the derivier of type
+       [internal]. Consider for instance the case where [u] is a map,
+       and internal is a list of bindings. *)
+    module M2 : sig type 'a u [@@deriving yojson] end = struct
+      type 'a internal = 'a list [@@deriving yojson]
+      type 'a u = 'a list    [@@deriving yojson]
+    end
+
+    (* the deriver for type [u] supposedly use the derivier of type
+       [internal]. Consider for instance the case where [u] is a map,
+       and internal is a list of bindings.  *)
+    (* module M1 : sig type 'a u [@@deriving yojson] end = struct *)
+    (*   type 'a internal = .. [@@deriving yojson] (\* Triggers the warning *\) *)
+    (*   type 'a internal += A of 'a | B of string list  [@@deriving yojson] *)
+    (*   type 'a u = 'a list    [@@deriving yojson] *)
+    (* end *)
+end
+
+end
+
 
 module TestShadowing = struct
   module List = struct
