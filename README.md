@@ -83,8 +83,8 @@ If the JSON object keys differ from OCaml conventions, lexical or otherwise, it 
 
 ``` ocaml
 type geo = {
-  lat [@key "Latitude"]  : float;
-  lon [@key "Longitude"] : float;
+  lat : float [@key "Latitude"];
+  lon : float [@key "Longitude"];
 }
 [@@deriving yojson]
 ```
@@ -111,7 +111,7 @@ It is possible to specify a default value for fields that can be missing from th
 ``` ocaml
 type pagination = {
   pages   : int;
-  current : int [@default 0];
+  current : (int [@default 0]);
 } [@@deriving yojson]
 ```
 
