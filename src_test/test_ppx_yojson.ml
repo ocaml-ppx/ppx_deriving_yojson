@@ -166,8 +166,8 @@ let test_rec ctxt =
                    {x=42; y="foo"} "{\"x\":42,\"y\":\"foo\"}"
 
 type geo = {
-  lat [@key "Latitude"]  : float;
-  lon [@key "Longitude"] : float;
+  lat : float [@key "Latitude"]  ;
+  lon : float [@key "Longitude"] ;
 }
 [@@deriving yojson, show]
 let test_key ctxt =
@@ -186,7 +186,7 @@ let test_id ctxt =
                    (`Int 42) "42"
 
 type custvar =
-| Tea   [@name "tea"]   of string
+| Tea   of string [@name "tea"]
 | Vodka [@name "vodka"]
 [@@deriving yojson, show]
 let test_custvar ctxt =
@@ -196,8 +196,8 @@ let test_custvar ctxt =
                    Vodka "[\"vodka\"]"
 
 type custpvar =
-[ `Tea   [@name "tea"]   of string
-| `Beer  [@name "beer"]  of string * float
+[ `Tea   of string [@name "tea"]
+| `Beer  of string * float [@name "beer"]
 | `Vodka [@name "vodka"]
 ] [@@deriving yojson, show]
 let test_custpvar ctxt =
