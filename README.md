@@ -77,6 +77,8 @@ By default, objects are deserialized strictly; that is, all keys in the object h
 
 ### Options
 
+Option attribute names may be prefixed with `yojson.` to avoid conflicts with other derivers.
+
 #### [@key]
 
 If the JSON object keys differ from OCaml conventions, lexical or otherwise, it is possible to specify the corresponding JSON key implicitly using <code>[@key "field"]</code>, e.g.:
