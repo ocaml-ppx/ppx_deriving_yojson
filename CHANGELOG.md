@@ -1,6 +1,16 @@
 Changelog
 =========
 
+2.3
+---
+
+  * Adapt to syntactic changes in 4.02.2.
+  * Improve compatibility with libraries that shadow modules
+    from standard library, such as Core.
+  * Allow deserializing float values that appear as integer
+    literals in the input JSON.
+  * Suppress some warnings.
+
 2.2
 ---
 
