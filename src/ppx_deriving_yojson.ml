@@ -294,7 +294,7 @@ let ser_str_of_type ~options ~path ({ ptype_loc = loc } as type_decl) =
                    let field  = Exp.field (evar "x") (mknoloc (Lident name)) in
                    let result = [%expr [%e str (attr_key name pld_attributes)],
                        [%e ser_expr_of_typ pld_type] [%e field]] in
-                   match attr_default pld_type.ptyp_attributes with
+                   match attr_default (pld_type.ptyp_attributes @ pld_attributes) with
                    | None ->
                        [%expr [%e result] :: fields]
                    | Some default ->
@@ -457,8 +457,8 @@ let desu_str_of_type ~options ~path ({ ptype_loc = loc } as type_decl) =
                 [Exp.case [%pat? []] record;
                   Exp.case [%pat? _ :: xs] default_case]
             and thunks =
-              labels |> List.map (fun { pld_name = { txt = name }; pld_type } ->
-                 match attr_default pld_type.ptyp_attributes with
+              labels |> List.map (fun { pld_name = { txt = name }; pld_type; pld_attributes } ->
+                 match attr_default (pld_type.ptyp_attributes @ pld_attributes) with
                  | None   -> error (path @ [name])
                  | Some x -> [%expr `Ok [%e x]])
             in
