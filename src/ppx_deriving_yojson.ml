@@ -66,8 +66,12 @@ let rec ser_expr_of_typ typ =
     [%expr function None -> `Null | Some x -> [%e ser_expr_of_typ typ] x]
   | [%type: Yojson.Safe.json] -> [%expr fun x -> x]
   | { ptyp_desc = Ptyp_constr ({ txt = lid }, args) } ->
-    app (Exp.ident (mknoloc (Ppx_deriving.mangle_lid (`Suffix "to_yojson") lid)))
-        (List.map ser_expr_of_typ args)
+     let fwd = app (Exp.ident (mknoloc (Ppx_deriving.mangle_lid (`Suffix "to_yojson") lid)))
+                   (List.map ser_expr_of_typ args)
+     in
+     (* eta-expansion is necessary for recursive groups *)
+     [%expr fun x -> [%e fwd] x]
+       
   | { ptyp_desc = Ptyp_tuple typs } ->
     [%expr fun [%p ptuple (List.mapi (fun i _ -> pvar (argn i)) typs)] ->
       `List ([%e
@@ -201,8 +205,10 @@ and desu_expr_of_typ ~path typ =
     [%expr fun (json : Yojson.Safe.json) ->
       [%e Exp.match_ [%expr json] (tag_cases @ [inherits_case])]]
   | { ptyp_desc = Ptyp_constr ({ txt = lid }, args) } ->
-    app (Exp.ident (mknoloc (Ppx_deriving.mangle_lid (`Suffix "of_yojson") lid)))
-        (List.map (desu_expr_of_typ ~path) args)
+     let fwd = app (Exp.ident (mknoloc (Ppx_deriving.mangle_lid (`Suffix "of_yojson") lid)))
+             (List.map (desu_expr_of_typ ~path) args) in
+     (* eta-expansion is necessary for recursive groups *)
+     [%expr fun x -> [%e fwd] x]
   | { ptyp_desc = Ptyp_var name } ->
     [%expr ([%e evar ("poly_"^name)] : Yojson.Safe.json -> [ `Ok of _ | `Error of string ])]
   | { ptyp_desc = Ptyp_alias (typ, name) } ->
