@@ -43,6 +43,7 @@ let rec ser_expr_of_typ typ =
     match attr_int_encoding typ with `String -> "String" | `Int -> "Intlit"
   in
   match typ with
+  | [%type: unit]            -> [%expr fun x -> `Null]
   | [%type: int]             -> [%expr fun x -> `Int x]
   | [%type: float]           -> [%expr fun x -> `Float x]
   | [%type: bool]            -> [%expr fun x -> `Bool x]
@@ -118,6 +119,7 @@ and desu_expr_of_typ ~path typ =
   in
   let decode pat exp = decode' [pat, exp] in
   match typ with
+  | [%type: unit]   -> decode [%pat? `Null] [%expr `Ok ()]
   | [%type: int]    -> decode [%pat? `Int x]    [%expr `Ok x]
   | [%type: float]  ->
     decode' [[%pat? `Int x],    [%expr `Ok (float_of_int x)];
