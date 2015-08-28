@@ -69,13 +69,13 @@ let rec ser_expr_of_typ typ =
      let fwd = app (Exp.ident (mknoloc (Ppx_deriving.mangle_lid (`Suffix "to_yojson") lid)))
                    (List.map ser_expr_of_typ args)
      in
-     (* eta-expansion is necessary for recursive groups *)
+     (* eta-expansion is necessary for let-rec *)
      [%expr fun x -> [%e fwd] x]
        
   | { ptyp_desc = Ptyp_tuple typs } ->
     [%expr fun [%p ptuple (List.mapi (fun i _ -> pvar (argn i)) typs)] ->
-      `List ([%e
-        list (List.mapi (fun i typ -> app (ser_expr_of_typ typ) [evar (argn i)]) typs)])];
+           `List ([%e
+                      list (List.mapi (fun i typ -> app (ser_expr_of_typ typ) [evar (argn i)]) typs)])];
   | { ptyp_desc = Ptyp_variant (fields, _, _); ptyp_loc } ->
     let cases =
       fields |> List.map (fun field ->
@@ -106,7 +106,7 @@ let rec ser_expr_of_typ typ =
   | { ptyp_loc } ->
     raise_errorf ~loc:ptyp_loc "%s cannot be derived for %s"
                  deriver (Ppx_deriving.string_of_core_type typ)
-
+                 
 (* http://desuchan.net/desu/src/1284751839295.jpg *)
 let rec desu_fold ~path f typs =
   typs |>
@@ -499,18 +499,13 @@ let desu_str_of_type ~options ~path ({ ptype_loc = loc } as type_decl) =
             raise_errorf ~loc "%s cannot be derived for fully abstract types" deriver
       in
       let ty = desu_type_of_decl ~options ~path type_decl in
-      try 
-        let fv = Ppx_deriving.free_vars_in_core_type ty in
-        let poly_type = Typ.force_poly @@ Typ.poly fv @@ ty in
-        let var = pvar (Ppx_deriving.mangle_type_decl (`Suffix "of_yojson") type_decl) in
-        ([],
-         [Vb.mk (Pat.constraint_ var poly_type)
-                (polymorphize [%expr ([%e wrap_runtime desurializer])])
-         ])
-      with e -> begin
-          Printf.printf "%s\n" (Pprintast.core_type Format.str_formatter ty ; Format.flush_str_formatter ()) ;
-          raise e
-        end
+      let fv = Ppx_deriving.free_vars_in_core_type ty in
+      let poly_type = Typ.force_poly @@ Typ.poly fv @@ ty in
+      let var = pvar (Ppx_deriving.mangle_type_decl (`Suffix "of_yojson") type_decl) in
+      ([],
+       [Vb.mk (Pat.constraint_ var poly_type)
+              (polymorphize [%expr ([%e wrap_runtime desurializer])])
+       ])
 
 let desu_str_of_type_ext ~options ~path ({ ptyext_path = { loc } } as type_ext) =
   ignore(parse_options options);
@@ -561,7 +556,7 @@ let desu_str_of_type_ext ~options ~path ({ ptyext_path = { loc } } as type_ext) 
   [ Str.value ?loc: None Nonrecursive
     [Vb.mk (Pat.construct (lid "()") None) body]
   ]
-    
+
 let ser_sig_of_type ~options ~path type_decl =
   let to_yojson =
     Sig.value (Val.mk (mknoloc (Ppx_deriving.mangle_type_decl (`Suffix "to_yojson") type_decl)) (ser_type_of_decl ~options ~path type_decl))
@@ -595,11 +590,15 @@ let ser_sig_of_type ~options ~path type_decl =
 
 
 let ser_sig_of_type_ext ~options ~path type_ext = []
-    
+
 let desu_sig_of_type ~options ~path type_decl =
   let of_yojson =
-    Sig.value (Val.mk (mknoloc (Ppx_deriving.mangle_type_decl (`Suffix "of_yojson") type_decl))
-              (desu_type_of_decl ~options ~path type_decl))
+    Sig.value (Val.mk
+                 (mknoloc (
+                     Ppx_deriving.mangle_type_decl
+                       (`Suffix "of_yojson")
+                       type_decl))
+                 (desu_type_of_decl ~options ~path type_decl))
   in
   match type_decl.ptype_kind with
     Ptype_open ->
