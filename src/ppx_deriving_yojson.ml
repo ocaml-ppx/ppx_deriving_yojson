@@ -66,11 +66,11 @@ let rec ser_expr_of_typ typ =
     [%expr function None -> `Null | Some x -> [%e ser_expr_of_typ typ] x]
   | [%type: Yojson.Safe.json] -> [%expr fun x -> x]
   | { ptyp_desc = Ptyp_constr ({ txt = lid }, args) } ->
-     let fwd = app (Exp.ident (mknoloc (Ppx_deriving.mangle_lid (`Suffix "to_yojson") lid)))
-                   (List.map ser_expr_of_typ args)
-     in
-     (* eta-expansion is necessary for let-rec *)
-     [%expr fun x -> [%e fwd] x]
+    let fwd = app (Exp.ident (mknoloc (Ppx_deriving.mangle_lid (`Suffix "to_yojson") lid)))
+        (List.map ser_expr_of_typ args)
+    in
+    (* eta-expansion is necessary for let-rec *)
+    [%expr fun x -> [%e fwd] x]
        
   | { ptyp_desc = Ptyp_tuple typs } ->
     [%expr fun [%p ptuple (List.mapi (fun i _ -> pvar (argn i)) typs)] ->

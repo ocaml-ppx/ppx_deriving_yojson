@@ -49,11 +49,11 @@ type v  = A | B of int | C of int * string
 [@@deriving show, yojson]
 type r  = { x : int; y : string }
 [@@deriving show, yojson]
-           
+     
 let test_unit ctxt =
   assert_roundtrip pp_u u_to_yojson u_of_yojson
-                   () "null"
-                   
+    () "null"
+
 let test_int ctxt =
   assert_roundtrip pp_i1 i1_to_yojson i1_of_yojson
                    42 "42";
@@ -381,7 +381,7 @@ let suite = "Test ppx_yojson" >::: [
     "test_nostrict"  >:: test_nostrict;
     "test_opentype"  >:: test_opentype;
     "test_recursive" >:: test_recursive;
-    ]
+  ]
 
 let _ =
   run_test_tt_main suite
