@@ -13,6 +13,7 @@ let assert_failure pp_obj of_json err str =
   let json = Yojson.Safe.from_string str in
   assert_equal ~printer:(show_error_or pp_obj) (`Error err) (of_json json)
 
+type u = unit         [@@deriving show, yojson]
 type i1 = int         [@@deriving show, yojson]
 type i2 = int32       [@@deriving show, yojson]
 type i3 = Int32.t     [@@deriving show, yojson]
@@ -48,6 +49,10 @@ type v  = A | B of int | C of int * string
 [@@deriving show, yojson]
 type r  = { x : int; y : string }
 [@@deriving show, yojson]
+     
+let test_unit ctxt =
+  assert_roundtrip pp_u u_to_yojson u_of_yojson
+    () "null"
 
 let test_int ctxt =
   assert_roundtrip pp_i1 i1_to_yojson i1_of_yojson
@@ -331,9 +336,25 @@ module Test_recursive_polyvariant = struct
   let c_of_yojson yj : [ `Ok of c | `Error of string ] = c_of_yojson yj
 end
 
+type 'a recursive1 = { lhs : string ; rhs : 'a }
+ and foo = unit recursive1
+ and bar = int recursive1 
+               [@@deriving show, yojson]
+    
+let test_recursive ctxt =
+  assert_roundtrip (pp_recursive1 pp_i1)
+                   (recursive1_to_yojson i1_to_yojson)
+                   (recursive1_of_yojson i1_of_yojson)                                   
+                   {lhs="x"; rhs=42} "{\"lhs\":\"x\",\"rhs\":42}";
 
+  assert_roundtrip pp_foo foo_to_yojson foo_of_yojson                                      
+                   {lhs="x"; rhs=()} "{\"lhs\":\"x\",\"rhs\":null}" ;
+
+  assert_roundtrip pp_bar bar_to_yojson bar_of_yojson                                      
+                   {lhs="x"; rhs=42} "{\"lhs\":\"x\",\"rhs\":42}"
 
 let suite = "Test ppx_yojson" >::: [
+    "test_unit"      >:: test_unit;
     "test_int"       >:: test_int;
     "test_int_edge"  >:: test_int_edge;
     "test_float"     >:: test_float;
@@ -359,6 +380,7 @@ let suite = "Test ppx_yojson" >::: [
     "test_shortcut"  >:: test_shortcut;
     "test_nostrict"  >:: test_nostrict;
     "test_opentype"  >:: test_opentype;
+    "test_recursive" >:: test_recursive;
   ]
 
 let _ =

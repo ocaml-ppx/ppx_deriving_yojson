@@ -43,6 +43,7 @@ let rec ser_expr_of_typ typ =
     match attr_int_encoding typ with `String -> "String" | `Int -> "Intlit"
   in
   match typ with
+  | [%type: unit]            -> [%expr fun x -> `Null]
   | [%type: int]             -> [%expr fun x -> `Int x]
   | [%type: float]           -> [%expr fun x -> `Float x]
   | [%type: bool]            -> [%expr fun x -> `Bool x]
@@ -65,12 +66,16 @@ let rec ser_expr_of_typ typ =
     [%expr function None -> `Null | Some x -> [%e ser_expr_of_typ typ] x]
   | [%type: Yojson.Safe.json] -> [%expr fun x -> x]
   | { ptyp_desc = Ptyp_constr ({ txt = lid }, args) } ->
-    app (Exp.ident (mknoloc (Ppx_deriving.mangle_lid (`Suffix "to_yojson") lid)))
+    let fwd = app (Exp.ident (mknoloc (Ppx_deriving.mangle_lid (`Suffix "to_yojson") lid)))
         (List.map ser_expr_of_typ args)
+    in
+    (* eta-expansion is necessary for let-rec *)
+    [%expr fun x -> [%e fwd] x]
+       
   | { ptyp_desc = Ptyp_tuple typs } ->
     [%expr fun [%p ptuple (List.mapi (fun i _ -> pvar (argn i)) typs)] ->
-      `List ([%e
-        list (List.mapi (fun i typ -> app (ser_expr_of_typ typ) [evar (argn i)]) typs)])];
+           `List ([%e
+                      list (List.mapi (fun i typ -> app (ser_expr_of_typ typ) [evar (argn i)]) typs)])];
   | { ptyp_desc = Ptyp_variant (fields, _, _); ptyp_loc } ->
     let cases =
       fields |> List.map (fun field ->
@@ -101,7 +106,7 @@ let rec ser_expr_of_typ typ =
   | { ptyp_loc } ->
     raise_errorf ~loc:ptyp_loc "%s cannot be derived for %s"
                  deriver (Ppx_deriving.string_of_core_type typ)
-
+                 
 (* http://desuchan.net/desu/src/1284751839295.jpg *)
 let rec desu_fold ~path f typs =
   typs |>
@@ -118,6 +123,7 @@ and desu_expr_of_typ ~path typ =
   in
   let decode pat exp = decode' [pat, exp] in
   match typ with
+  | [%type: unit]   -> decode [%pat? `Null] [%expr `Ok ()]
   | [%type: int]    -> decode [%pat? `Int x]    [%expr `Ok x]
   | [%type: float]  ->
     decode' [[%pat? `Int x],    [%expr `Ok (float_of_int x)];
@@ -199,8 +205,10 @@ and desu_expr_of_typ ~path typ =
     [%expr fun (json : Yojson.Safe.json) ->
       [%e Exp.match_ [%expr json] (tag_cases @ [inherits_case])]]
   | { ptyp_desc = Ptyp_constr ({ txt = lid }, args) } ->
-    app (Exp.ident (mknoloc (Ppx_deriving.mangle_lid (`Suffix "of_yojson") lid)))
-        (List.map (desu_expr_of_typ ~path) args)
+     let fwd = app (Exp.ident (mknoloc (Ppx_deriving.mangle_lid (`Suffix "of_yojson") lid)))
+             (List.map (desu_expr_of_typ ~path) args) in
+     (* eta-expansion is necessary for recursive groups *)
+     [%expr fun x -> [%e fwd] x]
   | { ptyp_desc = Ptyp_var name } ->
     [%expr ([%e evar ("poly_"^name)] : Yojson.Safe.json -> [ `Ok of _ | `Error of string ])]
   | { ptyp_desc = Ptyp_alias (typ, name) } ->
@@ -212,6 +220,13 @@ and desu_expr_of_typ ~path typ =
 let wrap_runtime decls =
   [%expr let open! Ppx_deriving_yojson_runtime in [%e decls]]
 
+let ser_type_of_decl ~options ~path type_decl =
+  ignore (parse_options options);
+  let typ = Ppx_deriving.core_type_of_type_decl type_decl in
+  let polymorphize = Ppx_deriving.poly_arrow_of_type_decl
+                       (fun var -> [%type: [%t var] -> Yojson.Safe.json]) type_decl in
+  polymorphize [%type: [%t typ] -> Yojson.Safe.json]
+    
 let ser_str_of_type ~options ~path ({ ptype_loc = loc } as type_decl) =
   ignore (parse_options options);
   let polymorphize = Ppx_deriving.poly_fun_of_type_decl type_decl in
@@ -308,9 +323,13 @@ let ser_str_of_type ~options ~path ({ ptype_loc = loc } as type_decl) =
         | Ptype_abstract, None ->
             raise_errorf ~loc "%s cannot be derived for fully abstract types" deriver
       in
+      let ty = ser_type_of_decl ~options ~path type_decl in
+      let fv = Ppx_deriving.free_vars_in_core_type ty in
+      let poly_type = Typ.force_poly @@ Typ.poly fv @@ ty in
+      let var = pvar (Ppx_deriving.mangle_type_decl (`Suffix "to_yojson") type_decl) in
       ([],
-       [Vb.mk (pvar (Ppx_deriving.mangle_type_decl (`Suffix "to_yojson") type_decl))
-          (polymorphize [%expr ([%e wrap_runtime serializer] : [%t typ] -> Yojson.Safe.json)])
+       [Vb.mk (Pat.constraint_ var poly_type)
+          (polymorphize [%expr ([%e wrap_runtime serializer])])
        ])
 
 let ser_str_of_type_ext ~options ~path ({ ptyext_path = { loc }} as type_ext) =
@@ -369,6 +388,13 @@ let ser_str_of_type_ext ~options ~path ({ ptyext_path = { loc }} as type_ext) =
 
 let error_or typ = [%type: [ `Ok of [%t typ] | `Error of string ]]
 
+let desu_type_of_decl ~options ~path type_decl =
+  ignore (parse_options options);
+  let typ = Ppx_deriving.core_type_of_type_decl type_decl in
+  let polymorphize = Ppx_deriving.poly_arrow_of_type_decl
+                       (fun var -> [%type: Yojson.Safe.json -> [%t error_or var]]) type_decl in
+  polymorphize [%type: Yojson.Safe.json -> [%t error_or typ]]
+                     
 let desu_str_of_type ~options ~path ({ ptype_loc = loc } as type_decl) =
   let is_strict = parse_options options in
   let path = path @ [type_decl.ptype_name.txt] in
@@ -472,9 +498,13 @@ let desu_str_of_type ~options ~path ({ ptype_loc = loc } as type_decl) =
         | Ptype_abstract, None ->
             raise_errorf ~loc "%s cannot be derived for fully abstract types" deriver
       in
+      let ty = desu_type_of_decl ~options ~path type_decl in
+      let fv = Ppx_deriving.free_vars_in_core_type ty in
+      let poly_type = Typ.force_poly @@ Typ.poly fv @@ ty in
+      let var = pvar (Ppx_deriving.mangle_type_decl (`Suffix "of_yojson") type_decl) in
       ([],
-       [Vb.mk (pvar (Ppx_deriving.mangle_type_decl (`Suffix "of_yojson") type_decl))
-        (polymorphize [%expr ([%e wrap_runtime desurializer] : Yojson.Safe.json -> [%t error_or typ])])
+       [Vb.mk (Pat.constraint_ var poly_type)
+              (polymorphize [%expr ([%e wrap_runtime desurializer])])
        ])
 
 let desu_str_of_type_ext ~options ~path ({ ptyext_path = { loc } } as type_ext) =
@@ -528,13 +558,8 @@ let desu_str_of_type_ext ~options ~path ({ ptyext_path = { loc } } as type_ext) 
   ]
 
 let ser_sig_of_type ~options ~path type_decl =
-  ignore (parse_options options);
-  let typ = Ppx_deriving.core_type_of_type_decl type_decl in
-  let polymorphize_ser  = Ppx_deriving.poly_arrow_of_type_decl
-    (fun var -> [%type: [%t var] -> Yojson.Safe.json]) type_decl in
   let to_yojson =
-    Sig.value (Val.mk (mknoloc (Ppx_deriving.mangle_type_decl (`Suffix "to_yojson") type_decl))
-       (polymorphize_ser  [%type: [%t typ] -> Yojson.Safe.json]))
+    Sig.value (Val.mk (mknoloc (Ppx_deriving.mangle_type_decl (`Suffix "to_yojson") type_decl)) (ser_type_of_decl ~options ~path type_decl))
   in
   match type_decl.ptype_kind with
     Ptype_open ->
@@ -567,13 +592,13 @@ let ser_sig_of_type ~options ~path type_decl =
 let ser_sig_of_type_ext ~options ~path type_ext = []
 
 let desu_sig_of_type ~options ~path type_decl =
-  ignore (parse_options options);
-  let typ = Ppx_deriving.core_type_of_type_decl type_decl in
-  let polymorphize_desu = Ppx_deriving.poly_arrow_of_type_decl
-    (fun var -> [%type: Yojson.Safe.json -> [%t error_or var]]) type_decl in
   let of_yojson =
-    Sig.value (Val.mk (mknoloc (Ppx_deriving.mangle_type_decl (`Suffix "of_yojson") type_decl))
-     (polymorphize_desu [%type: Yojson.Safe.json -> [%t error_or typ]]))
+    Sig.value (Val.mk
+                 (mknoloc (
+                     Ppx_deriving.mangle_type_decl
+                       (`Suffix "of_yojson")
+                       type_decl))
+                 (desu_type_of_decl ~options ~path type_decl))
   in
   match type_decl.ptype_kind with
     Ptype_open ->
