@@ -1,6 +1,6 @@
 opam-version: "1.2"
 name: "ppx_deriving_yojson"
-version: "2.3"
+version: "2.4"
 maintainer: "whitequark <whitequark@whitequark.org>"
 authors: [ "whitequark <whitequark@whitequark.org>" ]
 license: "MIT"
@@ -19,7 +19,7 @@ build-test: [
 ]
 depends: [
   "yojson"
-  "ppx_deriving" {>= "2.0" & < "3.0"}
+  "ppx_deriving" {>= "2.0" & < "4.0"}
   "ocamlfind"    {build}
   "ounit"        {test}
   "ppx_import"   {test}
