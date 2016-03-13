@@ -19,6 +19,7 @@ build-test: [
 ]
 depends: [
   "yojson"
+  "result"
   "ppx_deriving" {>= "2.0" & < "4.0"}
   "ocamlfind"    {build}
   "ounit"        {test}
