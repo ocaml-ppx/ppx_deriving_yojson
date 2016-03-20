@@ -1,17 +1,17 @@
 open OUnit2
 
 type json = [%import: Yojson.Safe.json] [@@deriving show]
-type 'a error_or = [ `Ok of 'a | `Error of string ] [@@deriving show]
+type 'a error_or = 'a Ppx_deriving_yojson_runtime.error_or [@@deriving show]
 
 let assert_roundtrip pp_obj to_json of_json obj str =
   let json = Yojson.Safe.from_string str in
   let cleanup json = Yojson.Safe.(json |> to_string |> from_string) in
   assert_equal ~printer:show_json json (cleanup (to_json obj));
-  assert_equal ~printer:(show_error_or pp_obj) (`Ok obj) (of_json json)
+  assert_equal ~printer:(show_error_or pp_obj) (Result.Ok obj) (of_json json)
 
 let assert_failure pp_obj of_json err str =
   let json = Yojson.Safe.from_string str in
-  assert_equal ~printer:(show_error_or pp_obj) (`Error err) (of_json json)
+  assert_equal ~printer:(show_error_or pp_obj) (Result.Error err) (of_json json)
 
 type u = unit         [@@deriving show, yojson]
 type i1 = int         [@@deriving show, yojson]
@@ -49,7 +49,7 @@ type v  = A | B of int | C of int * string
 [@@deriving show, yojson]
 type r  = { x : int; y : string }
 [@@deriving show, yojson]
-     
+
 let test_unit ctxt =
   assert_roundtrip pp_u u_to_yojson u_of_yojson
     () "null"
@@ -88,7 +88,7 @@ let test_float ctxt =
   assert_roundtrip pp_f f_to_yojson f_of_yojson
                    1.0 "1.0";
   assert_equal ~printer:(show_error_or pp_f)
-               (`Ok 1.0)
+               (Result.Ok 1.0)
                (f_of_yojson (`Int 1))
 
 let test_bool ctxt =
@@ -155,7 +155,7 @@ let test_pvar ctxt =
   assert_roundtrip pp_pvd pvd_to_yojson pvd_of_yojson
                    (`C 1) "[\"C\", 1]";
   assert_equal ~printer:(show_error_or pp_pvd)
-               (`Error "Test_ppx_yojson.pvd")
+               (Result.Error "Test_ppx_yojson.pvd")
                (pvd_of_yojson (`List [`String "D"]))
 
 let test_var ctxt =
@@ -182,7 +182,7 @@ let test_key ctxt =
 
 let test_field_err ctxt =
   assert_equal ~printer:(show_error_or pp_geo)
-               (`Error "Test_ppx_yojson.geo.lat")
+               (Result.Error "Test_ppx_yojson.geo.lat")
                (geo_of_yojson (`Assoc ["Longitude", (`Float 42.0)]))
 
 type id = Yojson.Safe.json [@@deriving yojson]
@@ -235,7 +235,7 @@ type nostrict = {
 [@@deriving show, yojson { strict = false }]
 let test_nostrict ctxt =
   assert_equal ~printer:(show_error_or pp_nostrict)
-               (`Ok { nostrict_field = 42 })
+               (Result.Ok { nostrict_field = 42 })
                (nostrict_of_yojson (`Assoc ["nostrict_field", (`Int 42);
                                             "some_other_field", (`Int 43)]))
 
@@ -333,7 +333,7 @@ module Test_recursive_polyvariant = struct
       [@@deriving of_yojson]
   type c = [ a | b | `D of b list]
       [@@deriving of_yojson]
-  let c_of_yojson yj : [ `Ok of c | `Error of string ] = c_of_yojson yj
+  let c_of_yojson yj : c error_or = c_of_yojson yj
 end
 
 type 'a recursive1 = { lhs : string ; rhs : 'a }

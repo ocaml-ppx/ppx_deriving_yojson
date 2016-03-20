@@ -10,7 +10,7 @@ exists_if = "ppx_deriving_yojson.cma"
 package "runtime" (
   version = "%{version}%"
   description = "Runtime components of [@@deriving yojson]"
-  requires = "yojson"
+  requires = "yojson result"
   archive(byte) = "ppx_deriving_yojson_runtime.cma"
   archive(byte, plugin) = "ppx_deriving_yojson_runtime.cma"
   archive(native) = "ppx_deriving_yojson_runtime.cmxa"

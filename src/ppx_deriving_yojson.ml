@@ -71,7 +71,7 @@ let rec ser_expr_of_typ typ =
     in
     (* eta-expansion is necessary for let-rec *)
     [%expr fun x -> [%e fwd] x]
-       
+
   | { ptyp_desc = Ptyp_tuple typs } ->
     [%expr fun [%p ptuple (List.mapi (fun i _ -> pvar (argn i)) typs)] ->
            `List ([%e
@@ -106,16 +106,16 @@ let rec ser_expr_of_typ typ =
   | { ptyp_loc } ->
     raise_errorf ~loc:ptyp_loc "%s cannot be derived for %s"
                  deriver (Ppx_deriving.string_of_core_type typ)
-                 
+
 (* http://desuchan.net/desu/src/1284751839295.jpg *)
 let rec desu_fold ~path f typs =
   typs |>
   List.mapi (fun i typ -> i, app (desu_expr_of_typ ~path typ) [evar (argn i)]) |>
   List.fold_left (fun x (i, y) ->
     [%expr [%e y] >>= fun [%p pvar (argn i)] -> [%e x]])
-    [%expr `Ok [%e f (List.mapi (fun i _ -> evar (argn i)) typs)]]
+    [%expr Result.Ok [%e f (List.mapi (fun i _ -> evar (argn i)) typs)]]
 and desu_expr_of_typ ~path typ =
-  let error = [%expr `Error [%e str (String.concat "." path)]] in
+  let error = [%expr Result.Error [%e str (String.concat "." path)]] in
   let decode' cases =
     Exp.function_ (
       List.map (fun (pat, exp) -> Exp.case pat exp) cases @
@@ -123,49 +123,49 @@ and desu_expr_of_typ ~path typ =
   in
   let decode pat exp = decode' [pat, exp] in
   match typ with
-  | [%type: unit]   -> decode [%pat? `Null] [%expr `Ok ()]
-  | [%type: int]    -> decode [%pat? `Int x]    [%expr `Ok x]
+  | [%type: unit]   -> decode [%pat? `Null] [%expr Result.Ok ()]
+  | [%type: int]    -> decode [%pat? `Int x]    [%expr Result.Ok x]
   | [%type: float]  ->
-    decode' [[%pat? `Int x],    [%expr `Ok (float_of_int x)];
-             [%pat? `Intlit x], [%expr `Ok (float_of_string x)];
-             [%pat? `Float x],  [%expr `Ok x]]
-  | [%type: bool]   -> decode [%pat? `Bool x]   [%expr `Ok x]
-  | [%type: string] -> decode [%pat? `String x] [%expr `Ok x]
-  | [%type: bytes]  -> decode [%pat? `String x] [%expr `Ok (Bytes.of_string x)]
+    decode' [[%pat? `Int x],    [%expr Result.Ok (float_of_int x)];
+             [%pat? `Intlit x], [%expr Result.Ok (float_of_string x)];
+             [%pat? `Float x],  [%expr Result.Ok x]]
+  | [%type: bool]   -> decode [%pat? `Bool x]   [%expr Result.Ok x]
+  | [%type: string] -> decode [%pat? `String x] [%expr Result.Ok x]
+  | [%type: bytes]  -> decode [%pat? `String x] [%expr Result.Ok (Bytes.of_string x)]
   | [%type: char]   ->
-    decode [%pat? `String x] [%expr if String.length x = 1 then `Ok x.[0] else [%e error]]
+    decode [%pat? `String x] [%expr if String.length x = 1 then Result.Ok x.[0] else [%e error]]
   | [%type: int32] | [%type: Int32.t] ->
-    decode' [[%pat? `Int x],    [%expr `Ok (Int32.of_int x)];
-             [%pat? `Intlit x], [%expr `Ok (Int32.of_string x)]]
+    decode' [[%pat? `Int x],    [%expr Result.Ok (Int32.of_int x)];
+             [%pat? `Intlit x], [%expr Result.Ok (Int32.of_string x)]]
   | [%type: int64] | [%type: Int64.t] ->
     begin match attr_int_encoding typ.ptyp_attributes with
     | `String ->
-      decode [%pat? `String x] [%expr `Ok (Int64.of_string x)]
+      decode [%pat? `String x] [%expr Result.Ok (Int64.of_string x)]
     | `Int ->
-      decode' [[%pat? `Int x],    [%expr `Ok (Int64.of_int x)];
-               [%pat? `Intlit x], [%expr `Ok (Int64.of_string x)]]
+      decode' [[%pat? `Int x],    [%expr Result.Ok (Int64.of_int x)];
+               [%pat? `Intlit x], [%expr Result.Ok (Int64.of_string x)]]
     end
   | [%type: nativeint] | [%type: Nativeint.t] ->
     begin match attr_int_encoding typ.ptyp_attributes with
     | `String ->
-      decode [%pat? `String x] [%expr `Ok (Nativeint.of_string x)]
+      decode [%pat? `String x] [%expr Result.Ok (Nativeint.of_string x)]
     | `Int ->
-      decode' [[%pat? `Int x],    [%expr `Ok (Nativeint.of_int x)];
-               [%pat? `Intlit x], [%expr `Ok (Nativeint.of_string x)]]
+      decode' [[%pat? `Int x],    [%expr Result.Ok (Nativeint.of_int x)];
+               [%pat? `Intlit x], [%expr Result.Ok (Nativeint.of_string x)]]
     end
   | [%type: [%t? typ] ref]   ->
     [%expr fun x -> [%e desu_expr_of_typ ~path:(path @ ["contents"]) typ] x >|= ref]
   | [%type: [%t? typ] option] ->
     [%expr function
-           | `Null -> `Ok None
-           | x     -> [%e desu_expr_of_typ ~path typ] x >>= fun x -> `Ok (Some x)]
+           | `Null -> Result.Ok None
+           | x     -> [%e desu_expr_of_typ ~path typ] x >>= fun x -> Result.Ok (Some x)]
   | [%type: [%t? typ] list]  ->
     decode [%pat? `List xs]
            [%expr map_bind [%e desu_expr_of_typ ~path typ] [] xs]
   | [%type: [%t? typ] array] ->
     decode [%pat? `List xs]
            [%expr map_bind [%e desu_expr_of_typ ~path typ] [] xs >|= Array.of_list]
-  | [%type: Yojson.Safe.json] -> [%expr fun x -> `Ok x]
+  | [%type: Yojson.Safe.json] -> [%expr fun x -> Result.Ok x]
   | { ptyp_desc = Ptyp_tuple typs } ->
     decode [%pat? `List [%p plist (List.mapi (fun i _ -> pvar (argn i)) typs)]]
            (desu_fold ~path tuple typs)
@@ -176,7 +176,7 @@ and desu_expr_of_typ ~path typ =
         match field with
         | Rtag (label, attrs, true (*empty*), []) ->
           Exp.case [%pat? `List [`String [%p pstr (attr_name label attrs)]]]
-                   [%expr `Ok [%e Exp.variant label None]]
+                   [%expr Result.Ok [%e Exp.variant label None]]
         | Rtag (label, attrs, false, [{ ptyp_desc = Ptyp_tuple typs }]) ->
           Exp.case [%pat? `List ((`String [%p pstr (attr_name label attrs)]) :: [%p
                       plist (List.mapi (fun i _ -> pvar (argn i)) typs)])]
@@ -184,7 +184,7 @@ and desu_expr_of_typ ~path typ =
         | Rtag (label, attrs, false, [typ]) ->
           Exp.case [%pat? `List [`String [%p pstr (attr_name label attrs)]; x]]
                    [%expr [%e desu_expr_of_typ ~path typ] x >>= fun x ->
-                          `Ok [%e Exp.variant label (Some [%expr x])]]
+                          Result.Ok [%e Exp.variant label (Some [%expr x])]]
         | Rinherit ({ ptyp_desc = Ptyp_constr (tname, _) } as typ) ->
           Exp.case [%pat? [%p Pat.type_ tname] as x]
                    [%expr [%e desu_expr_of_typ ~path typ] x]
@@ -198,8 +198,8 @@ and desu_expr_of_typ ~path typ =
       List.fold_left (fun expr typ ->
         [%expr
           match [%e desu_expr_of_typ ~path typ] json with
-          | (`Ok result) -> `Ok (result :> [%t toplevel_typ])
-          | `Error _ -> [%e expr]]) error |>
+          | (Result.Ok result) -> Result.Ok (result :> [%t toplevel_typ])
+          | Result.Error _ -> [%e expr]]) error |>
       Exp.case [%pat? _]
     in
     [%expr fun (json : Yojson.Safe.json) ->
@@ -210,7 +210,7 @@ and desu_expr_of_typ ~path typ =
      (* eta-expansion is necessary for recursive groups *)
      [%expr fun x -> [%e fwd] x]
   | { ptyp_desc = Ptyp_var name } ->
-    [%expr ([%e evar ("poly_"^name)] : Yojson.Safe.json -> [ `Ok of _ | `Error of string ])]
+    [%expr ([%e evar ("poly_"^name)] : Yojson.Safe.json -> _ error_or)]
   | { ptyp_desc = Ptyp_alias (typ, name) } ->
     [%expr fun x -> [%e evar ("poly_"^name)] x; [%e desu_expr_of_typ ~path typ] x]
   | { ptyp_loc } ->
@@ -218,7 +218,7 @@ and desu_expr_of_typ ~path typ =
                  deriver (Ppx_deriving.string_of_core_type typ)
 
 let wrap_runtime decls =
-  [%expr let open! Ppx_deriving_yojson_runtime in [%e decls]]
+  Ppx_deriving.sanitize ~module_:(Lident "Ppx_deriving_yojson_runtime") decls
 
 let ser_type_of_decl ~options ~path type_decl =
   ignore (parse_options options);
@@ -226,7 +226,7 @@ let ser_type_of_decl ~options ~path type_decl =
   let polymorphize = Ppx_deriving.poly_arrow_of_type_decl
                        (fun var -> [%type: [%t var] -> Yojson.Safe.json]) type_decl in
   polymorphize [%type: [%t typ] -> Yojson.Safe.json]
-    
+
 let ser_str_of_type ~options ~path ({ ptype_loc = loc } as type_decl) =
   ignore (parse_options options);
   let polymorphize = Ppx_deriving.poly_fun_of_type_decl type_decl in
@@ -386,7 +386,7 @@ let ser_str_of_type_ext ~options ~path ({ ptyext_path = { loc }} as type_ext) =
     [Vb.mk (Pat.construct (lid "()") None) body]
   ]
 
-let error_or typ = [%type: [ `Ok of [%t typ] | `Error of string ]]
+let error_or typ = [%type: [%t typ] error_or]
 
 let desu_type_of_decl ~options ~path type_decl =
   ignore (parse_options options);
@@ -394,11 +394,11 @@ let desu_type_of_decl ~options ~path type_decl =
   let polymorphize = Ppx_deriving.poly_arrow_of_type_decl
                        (fun var -> [%type: Yojson.Safe.json -> [%t error_or var]]) type_decl in
   polymorphize [%type: Yojson.Safe.json -> [%t error_or typ]]
-                     
+
 let desu_str_of_type ~options ~path ({ ptype_loc = loc } as type_decl) =
   let is_strict = parse_options options in
   let path = path @ [type_decl.ptype_name.txt] in
-  let error path = [%expr `Error [%e str (String.concat "." path)]] in
+  let error path = [%expr Result.Error [%e str (String.concat "." path)]] in
   let top_error = error path in
   let polymorphize = Ppx_deriving.poly_fun_of_type_decl type_decl in
   let typ = Ppx_deriving.core_type_of_type_decl type_decl in
@@ -468,7 +468,7 @@ let desu_str_of_type ~options ~path ({ ptype_loc = loc } as type_decl) =
             let record =
               List.fold_left (fun expr i ->
                  [%expr [%e evar (argn i)] >>= fun [%p pvar (argn i)] -> [%e expr]])
-                [%expr `Ok [%e Exp.record (labels |> List.mapi (fun i { pld_name = { txt = name } } ->
+                [%expr Result.Ok [%e Exp.record (labels |> List.mapi (fun i { pld_name = { txt = name } } ->
                         mknoloc (Lident name), evar (argn i))) None]]
                 (labels |> List.mapi (fun i _ -> i))
             in
@@ -486,7 +486,7 @@ let desu_str_of_type ~options ~path ({ ptype_loc = loc } as type_decl) =
               labels |> List.map (fun { pld_name = { txt = name }; pld_type; pld_attributes } ->
                  match attr_default (pld_type.ptyp_attributes @ pld_attributes) with
                  | None   -> error (path @ [name])
-                 | Some x -> [%expr `Ok [%e x]])
+                 | Some x -> [%expr Result.Ok [%e x]])
             in
             [%expr
               function
