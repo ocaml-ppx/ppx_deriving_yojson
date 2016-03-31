@@ -386,7 +386,7 @@ let ser_str_of_type_ext ~options ~path ({ ptyext_path = { loc }} as type_ext) =
     [Vb.mk (Pat.construct (lid "()") None) body]
   ]
 
-let error_or typ = [%type: [%t typ] error_or]
+let error_or typ = [%type: [%t typ] Ppx_deriving_yojson_runtime.error_or]
 
 let desu_type_of_decl ~options ~path type_decl =
   ignore (parse_options options);
