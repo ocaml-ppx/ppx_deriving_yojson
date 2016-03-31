@@ -1,7 +1,13 @@
 open OUnit2
 
 type json = [%import: Yojson.Safe.json] [@@deriving show]
-type 'a error_or = 'a Ppx_deriving_yojson_runtime.error_or [@@deriving show]
+
+let show_error_or =
+  let module M = struct
+    type 'a error_or =
+      [%import: Ppx_deriving_yojson_runtime.error_or] [@@deriving show]
+  end in
+  M.show_error_or
 
 let assert_roundtrip pp_obj to_json of_json obj str =
   let json = Yojson.Safe.from_string str in
@@ -333,7 +339,7 @@ module Test_recursive_polyvariant = struct
       [@@deriving of_yojson]
   type c = [ a | b | `D of b list]
       [@@deriving of_yojson]
-  let c_of_yojson yj : c error_or = c_of_yojson yj
+  let c_of_yojson yj : c Ppx_deriving_yojson_runtime.error_or = c_of_yojson yj
 end
 
 type 'a recursive1 = { lhs : string ; rhs : 'a }
