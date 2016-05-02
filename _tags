@@ -1,5 +1,5 @@
-true: warn(@5@8@10@11@12@14@23@24@26@29@40), bin_annot, safe_string
+true: warn(@5@8@10@11@12@14@23@24@26@29@40), bin_annot, safe_string, cppo_V_OCAML
 
 "src": include
 <src/*.{ml,mli,byte,native}>: package(ppx_tools.metaquot), package(ppx_deriving.api), package(result)
-<src_test/*.{ml,byte,native}>: debug, package(result), package(oUnit), package(yojson), use_yojson, use_ppx_deriving_yojson_runtime
+<src_test/*.{ml,byte,native}>: debug, package(result), package(oUnit), package(yojson), use_yojson

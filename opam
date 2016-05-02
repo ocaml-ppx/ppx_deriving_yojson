@@ -22,7 +22,8 @@ depends: [
   "result"
   "ppx_deriving" {>= "2.0" & < "4.0"}
   "ocamlfind"    {build}
+  "cppo"         {build}
   "ounit"        {test}
-  "ppx_import"   {test}
+  "ppx_import"   {test & >= "1.1"}
 ]
 

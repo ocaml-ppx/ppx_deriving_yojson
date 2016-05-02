@@ -1,3 +1,11 @@
+#if OCAML_VERSION < (4, 03, 0)
+#define Type_Nonrecursive
+#define Pconst_string Const_string
+#define Pcstr_tuple(x) x
+#else
+#define Type_Nonrecursive Nonrecursive
+#endif
+
 open Longident
 open Location
 open Asttypes
@@ -255,7 +263,7 @@ let ser_str_of_type ~options ~path ({ ptype_loc = loc } as type_decl) =
       let ty = Typ.poly poly_vars (polymorphize_ser [%type: [%t typ] -> Yojson.Safe.json]) in
       let default_fun =
         let type_path = String.concat "." (path @ [type_decl.ptype_name.txt]) in
-        let e_type_path = Exp.constant (Asttypes.Const_string (type_path, None)) in
+        let e_type_path = Exp.constant (Pconst_string (type_path, None)) in
         [%expr fun _ ->
           invalid_arg ("to_yojson: Maybe a [@@deriving yojson] is missing when extending the type "^
                        [%e e_type_path])]
@@ -274,7 +282,7 @@ let ser_str_of_type ~options ~path ({ ptype_loc = loc } as type_decl) =
       let mod_ =
         Str.module_ (Mb.mk (mknoloc mod_name)
                     (Mod.structure [
-          Str.type_ [typ];
+          Str.type_ Type_Nonrecursive [typ];
           Str.value Nonrecursive [record];
         ]))
       in
@@ -289,14 +297,24 @@ let ser_str_of_type ~options ~path ({ ptype_loc = loc } as type_decl) =
       | Ptype_variant constrs, _ ->
         constrs
         |> List.map (fun { pcd_name = { txt = name' }; pcd_args; pcd_attributes } ->
-          let args = List.mapi (fun i typ -> app (ser_expr_of_typ typ) [evar (argn i)]) pcd_args in
           let json_name = attr_name name' pcd_attributes in
-          let result =
-            match args with
-            | []   -> [%expr `List [`String [%e str json_name]]]
-            | args -> [%expr `List ((`String [%e str json_name]) :: [%e list args])]
-          in
-          Exp.case (pconstr name' (List.mapi (fun i _ -> pvar (argn i)) pcd_args)) result)
+          match pcd_args with
+          | Pcstr_tuple([]) ->
+            Exp.case
+              (pconstr name' [])
+              [%expr `List [`String [%e str json_name]]]
+          | Pcstr_tuple(args) ->
+            let arg_exprs =
+              List.mapi (fun i typ -> app (ser_expr_of_typ typ) [evar (argn i)]) args
+            in
+            Exp.case
+              (pconstr name' (List.mapi (fun i _ -> pvar (argn i)) args))
+              [%expr `List ((`String [%e str json_name]) :: [%e list arg_exprs])]
+#if OCAML_VERSION >= (4, 03, 0)
+          | Pcstr_record _ ->
+            raise_errorf ~loc "%s: record variants are not supported" deriver
+#endif
+          )
         |> Exp.function_
       | Ptype_record labels, _ ->
         let fields =
@@ -337,23 +355,32 @@ let ser_str_of_type_ext ~options ~path ({ ptyext_path = { loc }} as type_ext) =
              constructor declaration *)
           acc_cases
         | Pext_decl (pext_args, _) ->
-          let args = List.mapi (fun i typ -> app (ser_expr_of_typ typ) [evar (argn i)]) pext_args in
           let json_name = attr_name name' pext_attributes in
-          let result =
-            match args with
-            | []   -> [%expr `List [`String [%e str json_name]]]
-            | args -> [%expr `List ((`String [%e str json_name]) :: [%e list args])]
-          in
           let case =
-            Exp.case (pconstr name' (List.mapi (fun i _ -> pvar (argn i)) pext_args)) result
+            match pext_args with
+            | Pcstr_tuple([]) ->
+              Exp.case
+                (pconstr name' [])
+                [%expr `List [`String [%e str json_name]]]
+            | Pcstr_tuple(args) ->
+              let arg_exprs =
+                List.mapi (fun i typ -> app (ser_expr_of_typ typ) [evar (argn i)]) args
+              in
+              Exp.case
+                (pconstr name' (List.mapi (fun i _ -> pvar (argn i)) args))
+                [%expr `List ((`String [%e str json_name]) :: [%e list arg_exprs])]
+#if OCAML_VERSION >= (4, 03, 0)
+            | Pcstr_record _ ->
+              raise_errorf ~loc "%s: record variants are not supported" deriver
+#endif
           in
           case :: acc_cases) type_ext.ptyext_constructors []
     in
-    let any_case =
-      Exp.case (Pat.var (mknoloc "x"))
-               (app (Ppx_deriving.poly_apply_of_type_ext type_ext [%expr fallback]) [[%expr x]])
+    let fallback_case =
+      Exp.case [%pat? x]
+               [%expr [%e Ppx_deriving.poly_apply_of_type_ext type_ext [%expr fallback]] x]
     in
-    Exp.function_ (pats @ [any_case])
+    Exp.function_ (pats @ [fallback_case])
   in
   let mod_name =
     let mod_lid =
@@ -425,7 +452,7 @@ let desu_str_of_type ~options ~path ({ ptype_loc = loc } as type_decl) =
       let mod_ =
         Str.module_ (Mb.mk (mknoloc mod_name)
                     (Mod.structure [
-          Str.type_ [typ];
+          Str.type_ Type_Nonrecursive [typ];
           Str.value Nonrecursive [record];
         ]))
       in
@@ -439,12 +466,20 @@ let desu_str_of_type ~options ~path ({ ptype_loc = loc } as type_decl) =
       | Ptype_abstract, Some manifest ->
         desu_expr_of_typ ~path manifest
       | Ptype_variant constrs, _ ->
-        List.map (fun { pcd_name = { txt = name' }; pcd_args; pcd_attributes } ->
-           Exp.case [%pat? `List ((`String [%p pstr (attr_name name' pcd_attributes)]) ::
-              [%p plist (List.mapi (fun i _ -> pvar (argn i)) pcd_args)])]
-             (desu_fold ~path (fun x -> constr name' x) pcd_args)) constrs @
-          [Exp.case [%pat? _] top_error]
-        |> Exp.function_
+        let cases = List.map (fun { pcd_name = { txt = name' }; pcd_args; pcd_attributes } ->
+          match pcd_args with
+          | Pcstr_tuple(args) ->
+            Exp.case
+              [%pat? `List ((`String [%p pstr (attr_name name' pcd_attributes)]) ::
+                                     [%p plist (List.mapi (fun i _ -> pvar (argn i)) args)])]
+              (desu_fold ~path (fun x -> constr name' x) args)
+#if OCAML_VERSION >= (4, 03, 0)
+          | Pcstr_record _ ->
+            raise_errorf ~loc "%s: record variants are not supported" deriver
+#endif
+          ) constrs
+        in
+        Exp.function_ (cases @ [Exp.case [%pat? _] top_error])
       | Ptype_record labels, _ ->
         let record = List.fold_left (fun expr i ->
           [%expr [%e evar (argn i)] >>= fun [%p pvar (argn i)] -> [%e expr]])
@@ -498,9 +533,16 @@ let desu_str_of_type_ext ~options ~path ({ ptyext_path = { loc } } as type_ext) 
           acc_cases
         | Pext_decl (pext_args, _) ->
           let case =
-            Exp.case [%pat? `List ((`String [%p pstr (attr_name name' pext_attributes)]) ::
-              [%p plist (List.mapi (fun i _ -> pvar (argn i)) pext_args)])]
-              (desu_fold ~path (fun x -> constr name' x) pext_args)
+            match pext_args with
+            | Pcstr_tuple(args) ->
+              Exp.case
+                [%pat? `List ((`String [%p pstr (attr_name name' pext_attributes)]) ::
+                                       [%p plist (List.mapi (fun i _ -> pvar (argn i)) args)])]
+                (desu_fold ~path (fun x -> constr name' x) args)
+#if OCAML_VERSION >= (4, 03, 0)
+            | Pcstr_record _ ->
+              raise_errorf ~loc "%s: record variants are not supported" deriver
+#endif
           in
           case :: acc_cases)
         type_ext.ptyext_constructors []
@@ -551,7 +593,7 @@ let ser_sig_of_type ~options ~path type_decl =
     let mod_ =
       Sig.module_ (Md.mk (mknoloc mod_name)
                   (Mty.signature [
-        Sig.type_ [typ];
+        Sig.type_ Type_Nonrecursive [typ];
         Sig.value record;
       ]))
     in
@@ -587,7 +629,7 @@ let desu_sig_of_type ~options ~path type_decl =
     let mod_ =
       Sig.module_ (Md.mk (mknoloc mod_name)
                   (Mty.signature [
-        Sig.type_ [typ];
+        Sig.type_ Type_Nonrecursive [typ];
         Sig.value record;
       ]))
     in

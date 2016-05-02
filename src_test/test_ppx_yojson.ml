@@ -5,7 +5,7 @@ type json = [%import: Yojson.Safe.json] [@@deriving show]
 let show_error_or =
   let module M = struct
     type 'a error_or =
-      [%import: Ppx_deriving_yojson_runtime.error_or] [@@deriving show]
+      [%import: 'a Ppx_deriving_yojson_runtime.error_or] [@@deriving show]
   end in
   M.show_error_or
 
@@ -344,19 +344,19 @@ end
 
 type 'a recursive1 = { lhs : string ; rhs : 'a }
  and foo = unit recursive1
- and bar = int recursive1 
+ and bar = int recursive1
                [@@deriving show, yojson]
-    
+
 let test_recursive ctxt =
   assert_roundtrip (pp_recursive1 pp_i1)
                    (recursive1_to_yojson i1_to_yojson)
-                   (recursive1_of_yojson i1_of_yojson)                                   
+                   (recursive1_of_yojson i1_of_yojson)
                    {lhs="x"; rhs=42} "{\"lhs\":\"x\",\"rhs\":42}";
 
-  assert_roundtrip pp_foo foo_to_yojson foo_of_yojson                                      
+  assert_roundtrip pp_foo foo_to_yojson foo_of_yojson
                    {lhs="x"; rhs=()} "{\"lhs\":\"x\",\"rhs\":null}" ;
 
-  assert_roundtrip pp_bar bar_to_yojson bar_of_yojson                                      
+  assert_roundtrip pp_bar bar_to_yojson bar_of_yojson
                    {lhs="x"; rhs=42} "{\"lhs\":\"x\",\"rhs\":42}"
 
 let suite = "Test ppx_yojson" >::: [

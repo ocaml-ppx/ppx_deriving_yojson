@@ -1,7 +1,8 @@
 open Ocamlbuild_plugin
 
-let () = dispatch (
-  function
+let () = dispatch (fun phase ->
+  Ocamlbuild_cppo.dispatcher phase;
+  match phase with
   | After_rules ->
     let ppx_deriving_component deriver =
       (Findlib.query "ppx_deriving").Findlib.location ^ "/" ^ deriver
