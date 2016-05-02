@@ -11,6 +11,7 @@ script:
   - opam switch $OCAML
   - eval `opam config env`
   - opam pin add -n ppx_import git://github.com/whitequark/ppx_import
+  - opam pin add -n ppx_deriving git://github.com/whitequark/ppx_deriving
   - opam pin add -n -k path ppx_deriving_yojson .
   - opam install --deps-only -d -t ppx_deriving_yojson
   - opam install -d -t -v ppx_deriving_yojson
