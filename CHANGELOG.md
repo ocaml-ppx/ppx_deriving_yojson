@@ -6,6 +6,7 @@ Changelog
 
   * Use Result.result in generated code.
   * Compatibility with statically linked ppx drivers.
+  * OCaml 4.03 compatibility.
 
 2.3
 ---
