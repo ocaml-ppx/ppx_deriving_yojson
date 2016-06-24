@@ -1,6 +1,12 @@
 Changelog
 =========
 
+3.0
+---
+
+  * Use Result.result in generated code.
+  * Compatibility with statically linked ppx drivers.
+
 2.3
 ---
 
