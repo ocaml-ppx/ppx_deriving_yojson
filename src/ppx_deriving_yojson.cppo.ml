@@ -233,6 +233,26 @@ let ser_type_of_decl ~options ~path type_decl =
                        (fun var -> [%type: [%t var] -> Yojson.Safe.json]) type_decl in
   polymorphize [%type: [%t typ] -> Yojson.Safe.json]
 
+let ser_str_of_record varname labels =
+  let fields =
+    labels |> List.mapi (fun i { pld_name = { txt = name }; pld_type; pld_attributes } ->
+      let field  = Exp.field (evar varname) (mknoloc (Lident name)) in
+      let result = [%expr [%e str (attr_key name pld_attributes)],
+                    [%e ser_expr_of_typ pld_type] [%e field]] in
+      match attr_default (pld_type.ptyp_attributes @ pld_attributes) with
+      | None ->
+          [%expr [%e result] :: fields]
+      | Some default ->
+          [%expr if [%e field] = [%e default] then fields else [%e result] :: fields])
+  in
+  let assoc =
+    List.fold_left
+      (fun expr field -> [%expr let fields = [%e field] in [%e expr]])
+      [%expr `Assoc fields] fields
+  in
+  [%expr let fields = [] in [%e assoc]]
+
+
 let ser_str_of_type ~options ~path ({ ptype_loc = loc } as type_decl) =
   ignore (parse_options options);
   let polymorphize = Ppx_deriving.poly_fun_of_type_decl type_decl in
@@ -311,28 +331,16 @@ let ser_str_of_type ~options ~path ({ ptype_loc = loc } as type_decl) =
               (pconstr name' (List.mapi (fun i _ -> pvar (argn i)) args))
               [%expr `List ((`String [%e str json_name]) :: [%e list arg_exprs])]
 #if OCAML_VERSION >= (4, 03, 0)
-          | Pcstr_record _ ->
-            raise_errorf ~loc "%s: record variants are not supported" deriver
+          | Pcstr_record labels ->
+            let arg_expr = ser_str_of_record (argn 0) labels in
+            Exp.case
+              (pconstr name' [pvar(argn 0)])
+              [%expr `List ((`String [%e str json_name]) :: [%e list[arg_expr]])]
 #endif
           )
         |> Exp.function_
       | Ptype_record labels, _ ->
-        let fields =
-          labels |> List.mapi (fun i { pld_name = { txt = name }; pld_type; pld_attributes } ->
-            let field  = Exp.field (evar "x") (mknoloc (Lident name)) in
-            let result = [%expr [%e str (attr_key name pld_attributes)],
-                [%e ser_expr_of_typ pld_type] [%e field]] in
-            match attr_default (pld_type.ptyp_attributes @ pld_attributes) with
-            | None ->
-              [%expr [%e result] :: fields]
-            | Some default ->
-              [%expr if [%e field] = [%e default] then fields else [%e result] :: fields])
-        in
-        let assoc =
-          List.fold_left (fun expr field -> [%expr let fields = [%e field] in [%e expr]])
-            [%expr `Assoc fields] fields
-        in
-        [%expr fun x -> let fields = [] in [%e assoc]]
+        [%expr fun x -> [%e ser_str_of_record "x" labels]]
       | Ptype_abstract, None ->
         raise_errorf ~loc "%s cannot be derived for fully abstract types" deriver
     in
@@ -371,7 +379,7 @@ let ser_str_of_type_ext ~options ~path ({ ptyext_path = { loc }} as type_ext) =
                 [%expr `List ((`String [%e str json_name]) :: [%e list arg_exprs])]
 #if OCAML_VERSION >= (4, 03, 0)
             | Pcstr_record _ ->
-              raise_errorf ~loc "%s: record variants are not supported" deriver
+              raise_errorf ~loc "%s: record variants are not supported in extensible types" deriver
 #endif
           in
           case :: acc_cases) type_ext.ptyext_constructors []
@@ -405,6 +413,54 @@ let desu_type_of_decl ~options ~path type_decl =
   let polymorphize = Ppx_deriving.poly_arrow_of_type_decl
                        (fun var -> [%type: Yojson.Safe.json -> [%t error_or var]]) type_decl in
   polymorphize [%type: Yojson.Safe.json -> [%t error_or typ]]
+
+let desu_str_of_record ~is_strict ~error ~path wrap_record labels =
+  let top_error = error path in
+  let record =
+    List.fold_left
+      (fun expr i ->
+        [%expr [%e evar (argn i)] >>= fun [%p pvar (argn i)] -> [%e expr]]
+      )
+      [%expr
+        Result.Ok
+          [%e
+            wrap_record
+              (Exp.record
+                (labels |>
+                   List.mapi
+                     (fun i { pld_name = { txt = name } } ->
+                       mknoloc (Lident name), evar (argn i)
+                     )
+                )
+                None
+              )
+          ]
+      ]
+      (labels |> List.mapi (fun i _ -> i)) in
+  let default_case = if is_strict then top_error else [%expr loop xs _state] in
+  let cases =
+    (labels |> List.mapi (fun i { pld_name = { txt = name }; pld_type; pld_attributes } ->
+        let path = path @ [name] in
+        let thunks = labels |> List.mapi (fun j _ ->
+             if i = j then app (desu_expr_of_typ ~path pld_type) [evar "x"] else evar (argn j)) in
+        Exp.case [%pat? ([%p pstr (attr_key name pld_attributes)], x) :: xs]
+          [%expr loop xs [%e tuple thunks]])) @
+    [Exp.case [%pat? []] record;
+     Exp.case [%pat? _ :: xs] default_case]
+  and thunks =
+    labels |> List.map (fun { pld_name = { txt = name }; pld_type; pld_attributes } ->
+      match attr_default (pld_type.ptyp_attributes @ pld_attributes) with
+      | None   -> error (path @ [name])
+      | Some x -> [%expr Result.Ok [%e x]])
+  in
+  [%expr
+    function
+    | `Assoc xs ->
+      let rec loop xs ([%p ptuple (List.mapi (fun i _ -> pvar (argn i)) labels)] as _state) =
+        [%e Exp.match_ [%expr xs] cases]
+      in loop xs [%e tuple thunks]
+    | _ -> [%e top_error]]
+
 
 let desu_str_of_type ~options ~path ({ ptype_loc = loc } as type_decl) =
   let is_strict = parse_options options in
@@ -474,42 +530,20 @@ let desu_str_of_type ~options ~path ({ ptype_loc = loc } as type_decl) =
                                      [%p plist (List.mapi (fun i _ -> pvar (argn i)) args)])]
               (desu_fold ~path (fun x -> constr name' x) args)
 #if OCAML_VERSION >= (4, 03, 0)
-          | Pcstr_record _ ->
-            raise_errorf ~loc "%s: record variants are not supported" deriver
+          | Pcstr_record labels ->
+            let wrap_record r = constr name' [r] in
+            let sub =
+              desu_str_of_record ~is_strict ~error ~path wrap_record labels in
+            Exp.case
+              [%pat? `List ((`String [%p pstr (attr_name name' pcd_attributes)]) ::
+                              [%p plist [pvar (argn 0)]])]
+              [%expr [%e sub] [%e evar (argn 0)] ]
 #endif
           ) constrs
         in
         Exp.function_ (cases @ [Exp.case [%pat? _] top_error])
       | Ptype_record labels, _ ->
-        let record = List.fold_left (fun expr i ->
-          [%expr [%e evar (argn i)] >>= fun [%p pvar (argn i)] -> [%e expr]])
-          [%expr Result.Ok [%e Exp.record (labels |> List.mapi (fun i { pld_name = { txt = name } } ->
-                  mknoloc (Lident name), evar (argn i))) None]]
-          (labels |> List.mapi (fun i _ -> i))
-        in
-        let default_case = if is_strict then top_error else [%expr loop xs _state] in
-        let cases =
-          (labels |> List.mapi (fun i { pld_name = { txt = name }; pld_type; pld_attributes } ->
-              let path = path @ [name] in
-              let thunks = labels |> List.mapi (fun j _ ->
-                   if i = j then app (desu_expr_of_typ ~path pld_type) [evar "x"] else evar (argn j)) in
-              Exp.case [%pat? ([%p pstr (attr_key name pld_attributes)], x) :: xs]
-                [%expr loop xs [%e tuple thunks]])) @
-          [Exp.case [%pat? []] record;
-           Exp.case [%pat? _ :: xs] default_case]
-        and thunks =
-          labels |> List.map (fun { pld_name = { txt = name }; pld_type; pld_attributes } ->
-            match attr_default (pld_type.ptyp_attributes @ pld_attributes) with
-            | None   -> error (path @ [name])
-            | Some x -> [%expr Result.Ok [%e x]])
-        in
-        [%expr
-          function
-          | `Assoc xs ->
-            let rec loop xs ([%p ptuple (List.mapi (fun i _ -> pvar (argn i)) labels)] as _state) =
-              [%e Exp.match_ [%expr xs] cases]
-            in loop xs [%e tuple thunks]
-          | _ -> [%e top_error]]
+        desu_str_of_record ~is_strict ~error ~path (fun r -> r) labels
       | Ptype_abstract, None ->
         raise_errorf ~loc "%s cannot be derived for fully abstract types" deriver
     in
@@ -541,7 +575,7 @@ let desu_str_of_type_ext ~options ~path ({ ptyext_path = { loc } } as type_ext) 
                 (desu_fold ~path (fun x -> constr name' x) args)
 #if OCAML_VERSION >= (4, 03, 0)
             | Pcstr_record _ ->
-              raise_errorf ~loc "%s: record variants are not supported" deriver
+              raise_errorf ~loc "%s: record variants are not supported in extensible types" deriver
 #endif
           in
           case :: acc_cases)

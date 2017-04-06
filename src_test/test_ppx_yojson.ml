@@ -55,6 +55,8 @@ type v  = A | B of int | C of int * string
 [@@deriving show, yojson]
 type r  = { x : int; y : string }
 [@@deriving show, yojson]
+type rv = RA | RB of int | RC of int * string | RD of { z : string }
+[@@deriving show, yojson]
 
 let test_unit ctxt =
   assert_roundtrip pp_u u_to_yojson u_of_yojson
@@ -175,6 +177,16 @@ let test_var ctxt =
 let test_rec ctxt =
   assert_roundtrip pp_r r_to_yojson r_of_yojson
                    {x=42; y="foo"} "{\"x\":42,\"y\":\"foo\"}"
+
+let test_recvar ctxt =
+  assert_roundtrip pp_rv rv_to_yojson rv_of_yojson
+                   RA "[\"RA\"]";
+  assert_roundtrip pp_rv rv_to_yojson rv_of_yojson
+                   (RB 42) "[\"RB\", 42]";
+  assert_roundtrip pp_rv rv_to_yojson rv_of_yojson
+                   (RC(42, "foo")) "[\"RC\", 42, \"foo\"]";
+  assert_roundtrip pp_rv rv_to_yojson rv_of_yojson
+                   (RD{z="foo"}) "[\"RD\", {\"z\": \"foo\"}]"
 
 type geo = {
   lat : float [@key "Latitude"]  ;
@@ -376,6 +388,7 @@ let suite = "Test ppx_yojson" >::: [
     "test_pvar"      >:: test_pvar;
     "test_var"       >:: test_var;
     "test_rec"       >:: test_rec;
+    "test_recvar"    >:: test_recvar;
     "test_key"       >:: test_key;
     "test_id"        >:: test_id;
     "test_custvar"   >:: test_custvar;
