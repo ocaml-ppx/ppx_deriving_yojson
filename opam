@@ -20,9 +20,10 @@ build-test: [
 depends: [
   "yojson"
   "result"
+  "ppx_tools_versioned"
+  "ocaml-migrate-parsetree"
   "ppx_deriving" {>= "4.0" & < "5.0"}
   "ocamlfind"    {build}
-  "cppo"         {build}
   "ounit"        {test}
   "ppx_import"   {test & >= "1.1"}
 ]
