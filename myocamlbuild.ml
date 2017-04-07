@@ -1,7 +1,6 @@
 open Ocamlbuild_plugin
 
 let () = dispatch (fun phase ->
-  Ocamlbuild_cppo.dispatcher phase;
   match phase with
   | After_rules ->
     let ppx_deriving_component deriver =

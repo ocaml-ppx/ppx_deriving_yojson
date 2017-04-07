@@ -3,7 +3,7 @@
 #use "topkg.ml"
 
 let ocamlbuild =
-  "ocamlbuild -use-ocamlfind -classic-display -plugin-tag 'package(cppo_ocamlbuild)'"
+  "ocamlbuild -use-ocamlfind -classic-display"
 
 let () =
   Pkg.describe "ppx_deriving_yojson" ~builder:(`Other (ocamlbuild, "_build")) [
