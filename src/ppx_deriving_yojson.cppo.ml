@@ -421,21 +421,12 @@ let desu_str_of_record ~is_strict ~error ~path wrap_record labels =
       (fun expr i ->
         [%expr [%e evar (argn i)] >>= fun [%p pvar (argn i)] -> [%e expr]]
       )
-      [%expr
-        Result.Ok
-          [%e
-            wrap_record
-              (Exp.record
-                (labels |>
-                   List.mapi
-                     (fun i { pld_name = { txt = name } } ->
-                       mknoloc (Lident name), evar (argn i)
-                     )
-                )
-                None
-              )
-          ]
-      ]
+      ( let r =
+          Exp.record (labels |>
+            List.mapi (fun i { pld_name = { txt = name } } ->
+              mknoloc (Lident name), evar (argn i)))
+            None in
+        [%expr Result.Ok [%e wrap_record r] ] )
       (labels |> List.mapi (fun i _ -> i)) in
   let default_case = if is_strict then top_error else [%expr loop xs _state] in
   let cases =
