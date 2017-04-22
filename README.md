@@ -75,6 +75,16 @@ Variants (regular and polymorphic) are represented using arrays; the first eleme
 
 By default, objects are deserialized strictly; that is, all keys in the object have to correspond to fields of the record. Passing `strict = false` as an option to the deriver  (i.e. `[@@deriving yojson { strict = false }]`) changes the behavior to ignore any unknown fields.
 
+### Record variants
+
+OCaml 4.03 introduced record variants, like `type t = X of { field : type }`.
+These are handled as if the record was defined independently, i.e.
+`type t = X of t_record and t_record = { field : type }`.
+
+Because of the implementers' laziness, record variants do not work yet
+for extensible types (when you extend with `type t += ...`). A patch
+would be welcome.
+
 ### Options
 
 Option attribute names may be prefixed with `yojson.` to avoid conflicts with other derivers.
