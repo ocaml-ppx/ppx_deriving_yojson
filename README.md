@@ -73,17 +73,17 @@ Variants (regular and polymorphic) are represented using arrays; the first eleme
 [["A"],["B",42],["C",42,"foo"]]
 ```
 
+Record variants are represented in the same way as if the nested structure was defined separately. For example:
+
+```ocaml
+# type v = X of { v: int } [@@deriving yojson];;
+# print_endline (Yojson.Safe.to_string (v_to_yojson (X { v = 0 })));;
+["X",{"v":0}]
+```
+
+Record variants are currently not supported for extensible variant types.
+
 By default, objects are deserialized strictly; that is, all keys in the object have to correspond to fields of the record. Passing `strict = false` as an option to the deriver  (i.e. `[@@deriving yojson { strict = false }]`) changes the behavior to ignore any unknown fields.
-
-### Record variants
-
-OCaml 4.03 introduced record variants, like `type t = X of { field : type }`.
-These are handled as if the record was defined independently, i.e.
-`type t = X of t_record and t_record = { field : type }`.
-
-Because of the implementers' laziness, record variants do not work yet
-for extensible types (when you extend with `type t += ...`). A patch
-would be welcome.
 
 ### Options
 
