@@ -681,11 +681,18 @@ let sig_of_type_ext ~options ~path type_ext =
   (ser_sig_of_type_ext ~options ~path type_ext) @
   (desu_sig_of_type_ext ~options ~path type_ext)
 
+let suppress_warnings str =
+  let attr = Str.attribute @@ Ppx_deriving.attr_warning [%expr "-39"] in
+  [Str.include_ (Incl.mk (Mod.structure (attr::str)))]
+
 let structure f ~options ~path type_ =
   let (pre, vals) = f ~options ~path type_ in
-  match vals with
-  | [] -> pre
-  | _  -> pre @ [Str.value ?loc:None Recursive vals]
+  let inner =
+    match vals with
+    | [] -> pre
+    | _  -> pre @ [Str.value ?loc:None Recursive vals]
+  in
+  suppress_warnings inner
 
 let on_str_decls f ~options ~path type_decls =
   let (pre, vals) = List.split (List.map (f ~options ~path) type_decls) in
