@@ -129,6 +129,14 @@ type pagination = {
 
 Fields with default values are not required to be present in inputs and will not be emitted in outputs.
 
+Note that the default attribute can be used to create an empty JSON object from an OCaml record, e.g.,:
+
+```ocaml
+# type t = { empty = unit [@default ()] } [@@deriving yojson];;
+# Yojson.Safe.to_string ([%to_yojson: t] { empty = () });;
+- : string = "{}"
+```
+
 License
 -------
 
