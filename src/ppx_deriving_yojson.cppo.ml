@@ -51,11 +51,11 @@ let rec ser_expr_of_typ typ =
     match attr_int_encoding typ with `String -> "String" | `Int -> "Intlit"
   in
   match typ with
-  | [%type: unit]            -> [%expr fun x -> `Null]
-  | [%type: int]             -> [%expr fun x -> `Int x]
-  | [%type: float]           -> [%expr fun x -> `Float x]
-  | [%type: bool]            -> [%expr fun x -> `Bool x]
-  | [%type: string]          -> [%expr fun x -> `String x]
+  | [%type: unit]            -> [%expr fun (x:Ppx_deriving_runtime.unit) -> `Null]
+  | [%type: int]             -> [%expr fun (x:Ppx_deriving_runtime.int) -> `Int x]
+  | [%type: float]           -> [%expr fun (x:Ppx_deriving_runtime.float) -> `Float x]
+  | [%type: bool]            -> [%expr fun (x:Ppx_deriving_runtime.bool) -> `Bool x]
+  | [%type: string]          -> [%expr fun (x:Ppx_deriving_runtime.string) -> `String x]
   | [%type: bytes]           -> [%expr fun x -> `String (Bytes.to_string x)]
   | [%type: char]            -> [%expr fun x -> `String (String.make 1 x)]
   | [%type: [%t? typ] ref]   -> [%expr fun x -> [%e ser_expr_of_typ typ] !x]
