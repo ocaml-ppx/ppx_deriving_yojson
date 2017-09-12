@@ -375,6 +375,16 @@ let test_recursive ctxt =
   assert_roundtrip pp_bar bar_to_yojson bar_of_yojson
                    {lhs="x"; rhs=42} "{\"lhs\":\"x\",\"rhs\":42}"
 
+let test_int_redefined ctxt =
+  let module M = struct
+    type int = Break_things
+
+    let x = [%to_yojson: int] 1
+  end
+  in
+  let expected = `Int 1 in
+  assert_equal ~ctxt ~printer:show_json expected M.x
+
 let suite = "Test ppx_yojson" >::: [
     "test_unit"      >:: test_unit;
     "test_int"       >:: test_int;
@@ -406,6 +416,7 @@ let suite = "Test ppx_yojson" >::: [
     "test_nostrict"  >:: test_nostrict;
     "test_opentype"  >:: test_opentype;
     "test_recursive" >:: test_recursive;
+    "test_int_redefined" >:: test_int_redefined;
   ]
 
 let _ =
