@@ -253,6 +253,23 @@ let ser_str_of_record varname labels =
   [%expr let fields = [] in [%e assoc]]
 
 
+let poly_vars_of_type_decl td =
+#if OCAML_VERSION >= (4, 05, 0)
+  let loc = { td.ptype_loc with loc_ghost = true } in
+  Ppx_deriving.fold_left_type_decl (fun acc name -> (mkloc name loc) :: acc) [] td
+#else
+  Ppx_deriving.fold_left_type_decl (fun acc name -> name :: acc) [] td
+#endif
+
+let poly_fun_of_exp_and_type_decl init_exp td =
+#if OCAML_VERSION >= (4, 05, 0)
+  let loc = { td.ptype_loc with loc_ghost = true } in
+  Ppx_deriving.fold_left_type_decl (fun exp name -> Exp.newtype (mkloc name loc) exp)
+    init_exp td
+#else
+   Ppx_deriving.fold_left_type_decl (fun exp name -> Exp.newtype name exp) init_exp td
+#endif
+
 let ser_str_of_type ~options ~path ({ ptype_loc = loc } as type_decl) =
   ignore (parse_options options);
   let polymorphize = Ppx_deriving.poly_fun_of_type_decl type_decl in
@@ -274,9 +291,7 @@ let ser_str_of_type ~options ~path ({ ptype_loc = loc } as type_decl) =
     | Some _ ->
       raise_errorf ~loc "%s: extensible type manifest should be a type name" deriver
     | None ->
-      let poly_vars = List.rev
-          (Ppx_deriving.fold_left_type_decl (fun acc name -> name :: acc) [] type_decl)
-      in
+      let poly_vars = List.rev (poly_vars_of_type_decl type_decl) in
       let polymorphize_ser  = Ppx_deriving.poly_arrow_of_type_decl
         (fun var -> [%type: [%t var] -> Yojson.Safe.json]) type_decl
       in
@@ -288,10 +303,7 @@ let ser_str_of_type ~options ~path ({ ptype_loc = loc } as type_decl) =
           invalid_arg ("to_yojson: Maybe a [@@deriving yojson] is missing when extending the type "^
                        [%e e_type_path])]
       in
-      let poly_fun = polymorphize default_fun in
-      let poly_fun =
-        (Ppx_deriving.fold_left_type_decl (fun exp name -> Exp.newtype name exp) poly_fun type_decl)
-      in
+      let poly_fun = poly_fun_of_exp_and_type_decl (polymorphize default_fun) type_decl in
       let mod_name = "M_"^to_yojson_name in
       let typ = Type.mk ~kind:(Ptype_record [Type.field ~mut:Mutable (mknoloc "f") ty])
                               (mknoloc "t_to_yojson")
@@ -345,8 +357,7 @@ let ser_str_of_type ~options ~path ({ ptype_loc = loc } as type_decl) =
         raise_errorf ~loc "%s cannot be derived for fully abstract types" deriver
     in
     let ty = ser_type_of_decl ~options ~path type_decl in
-    let fv = Ppx_deriving.free_vars_in_core_type ty in
-    let poly_type = Typ.force_poly @@ Typ.poly fv @@ ty in
+    let poly_type = Ppx_deriving.strong_type_of_type ty in
     let var = pvar (Ppx_deriving.mangle_type_decl (`Suffix "to_yojson") type_decl) in
     ([],
      [Vb.mk (Pat.constraint_ var poly_type)
@@ -477,19 +488,14 @@ let desu_str_of_type ~options ~path ({ ptype_loc = loc } as type_decl) =
     | Some _ ->
       raise_errorf ~loc "%s: extensible type manifest should be a type name" deriver
     | None ->
-      let poly_vars = List.rev
-        (Ppx_deriving.fold_left_type_decl (fun acc name -> name :: acc) [] type_decl)
-      in
+      let poly_vars = List.rev (poly_vars_of_type_decl type_decl) in
       let polymorphize_desu = Ppx_deriving.poly_arrow_of_type_decl
         (fun var -> [%type: Yojson.Safe.json -> [%t error_or var]]) type_decl in
       let ty = Typ.poly poly_vars
         (polymorphize_desu [%type: Yojson.Safe.json -> [%t error_or typ]])
       in
       let default_fun = Exp.function_ [Exp.case [%pat? _] top_error] in
-      let poly_fun = polymorphize default_fun in
-      let poly_fun =
-        (Ppx_deriving.fold_left_type_decl (fun exp name -> Exp.newtype name exp) poly_fun type_decl)
-      in
+      let poly_fun = poly_fun_of_exp_and_type_decl (polymorphize default_fun) type_decl in
       let mod_name = "M_"^of_yojson_name in
       let typ = Type.mk ~kind:(Ptype_record [Type.field ~mut:Mutable (mknoloc "f") ty])
                         (mknoloc "t_of_yojson") in
@@ -539,8 +545,7 @@ let desu_str_of_type ~options ~path ({ ptype_loc = loc } as type_decl) =
         raise_errorf ~loc "%s cannot be derived for fully abstract types" deriver
     in
     let ty = desu_type_of_decl ~options ~path type_decl in
-    let fv = Ppx_deriving.free_vars_in_core_type ty in
-    let poly_type = Typ.force_poly @@ Typ.poly fv @@ ty in
+    let poly_type = Ppx_deriving.strong_type_of_type ty in
     let var = pvar (Ppx_deriving.mangle_type_decl (`Suffix "of_yojson") type_decl) in
     ([],
      [Vb.mk (Pat.constraint_ var poly_type)
@@ -603,9 +608,7 @@ let ser_sig_of_type ~options ~path type_decl =
     let mod_name = Ppx_deriving.mangle_type_decl
       (`PrefixSuffix ("M", "to_yojson")) type_decl
     in
-    let poly_vars = List.rev
-      (Ppx_deriving.fold_left_type_decl (fun acc name -> name :: acc) [] type_decl)
-    in
+    let poly_vars = List.rev (poly_vars_of_type_decl type_decl) in
     let typ = Ppx_deriving.core_type_of_type_decl type_decl in
     let polymorphize_ser  = Ppx_deriving.poly_arrow_of_type_decl
       (fun var -> [%type: [%t var] -> Yojson.Safe.json]) type_decl
@@ -638,9 +641,7 @@ let desu_sig_of_type ~options ~path type_decl =
     let mod_name = Ppx_deriving.mangle_type_decl
       (`PrefixSuffix ("M", "of_yojson")) type_decl
     in
-    let poly_vars = List.rev
-      (Ppx_deriving.fold_left_type_decl (fun acc name -> name :: acc) [] type_decl)
-    in
+    let poly_vars = List.rev (poly_vars_of_type_decl type_decl) in
     let typ = Ppx_deriving.core_type_of_type_decl type_decl in
     let polymorphize_desu = Ppx_deriving.poly_arrow_of_type_decl
       (fun var -> [%type: Yojson.Safe.json -> [%t error_or var]]) type_decl in
