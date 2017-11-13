@@ -6,6 +6,12 @@
 #define Type_Nonrecursive Nonrecursive
 #endif
 
+#if OCAML_VERSION >= (4, 06, 0)
+#define Rtag(label, attrs, has_empty, args) \
+        Rtag({ txt = label }, attrs, has_empty, args)
+#endif
+
+
 open Longident
 open Location
 open Asttypes
@@ -88,15 +94,15 @@ let rec ser_expr_of_typ typ =
     let cases =
       fields |> List.map (fun field ->
         match field with
-        | Rtag (label, attrs, true (*empty*), []) ->
+        | Rtag(label, attrs, true (*empty*), []) ->
           Exp.case (Pat.variant label None)
                    [%expr `List [`String [%e str (attr_name label attrs)]]]
-        | Rtag (label, attrs, false, [{ ptyp_desc = Ptyp_tuple typs }]) ->
+        | Rtag(label, attrs, false, [{ ptyp_desc = Ptyp_tuple typs }]) ->
           Exp.case (Pat.variant label (Some (ptuple (List.mapi (fun i _ -> pvar (argn i)) typs))))
                    [%expr `List ((`String [%e str (attr_name label attrs)]) :: [%e
                       list (List.mapi
                         (fun i typ -> app (ser_expr_of_typ typ) [evar (argn i)]) typs)])]
-        | Rtag (label, attrs, false, [typ]) ->
+        | Rtag(label, attrs, false, [typ]) ->
           Exp.case (Pat.variant label (Some [%pat? x]))
                    [%expr `List [`String [%e str (attr_name label attrs)];
                                  [%e ser_expr_of_typ typ] x]]
@@ -181,14 +187,14 @@ and desu_expr_of_typ ~path typ =
     let inherits, tags = List.partition (function Rinherit _ -> true | _ -> false) fields in
     let tag_cases = tags |> List.map (fun field ->
       match field with
-      | Rtag (label, attrs, true (*empty*), []) ->
+      | Rtag(label, attrs, true (*empty*), []) ->
         Exp.case [%pat? `List [`String [%p pstr (attr_name label attrs)]]]
                  [%expr Result.Ok [%e Exp.variant label None]]
-      | Rtag (label, attrs, false, [{ ptyp_desc = Ptyp_tuple typs }]) ->
+      | Rtag(label, attrs, false, [{ ptyp_desc = Ptyp_tuple typs }]) ->
         Exp.case [%pat? `List ((`String [%p pstr (attr_name label attrs)]) :: [%p
                     plist (List.mapi (fun i _ -> pvar (argn i)) typs)])]
                  (desu_fold ~path (fun x -> (Exp.variant label (Some (tuple x)))) typs)
-      | Rtag (label, attrs, false, [typ]) ->
+      | Rtag(label, attrs, false, [typ]) ->
         Exp.case [%pat? `List [`String [%p pstr (attr_name label attrs)]; x]]
                  [%expr [%e desu_expr_of_typ ~path typ] x >>= fun x ->
                         Result.Ok [%e Exp.variant label (Some [%expr x])]]
