@@ -1,6 +1,19 @@
 Changelog
 =========
 
+3.1
+---
+
+  * Fix ppx_deriving_yojson.runtime META file
+    (#47)
+    Étienne Millon
+  * Support for inline records in variant types
+    (#50)
+    Gerd Stolpmann
+  * OCaml 4.06 compatibility
+    (#64, #66)
+    Leonid Rozenberg, Gabriel Scherer
+
 3.0
 ---
 
