@@ -276,7 +276,8 @@ let ser_str_of_type ~options ~path ({ ptype_loc = loc } as type_decl) =
       let orig_mod = Mod.ident (mknoloc lid) in
       ([Str.module_ (Mb.mk (mknoloc mod_name) orig_mod)],
        [Vb.mk (pvar to_yojson_name)
-              (polymorphize [%expr ([%e ser] : [%t typ] -> Yojson.Safe.json)])])
+              (polymorphize [%expr ([%e ser] : [%t typ] -> Yojson.Safe.json)])],
+       [])
     | Some _ ->
       raise_errorf ~loc "%s: extensible type manifest should be a type name" deriver
     | None ->
@@ -313,7 +314,8 @@ let ser_str_of_type ~options ~path ({ ptype_loc = loc } as type_decl) =
         ]))
       in
       ([mod_],
-       [Vb.mk (pvar to_yojson_name) [%expr fun x -> [%e field] x]])
+       [Vb.mk (pvar to_yojson_name) [%expr fun x -> [%e field] x]],
+       [])
   end
   | kind ->
     let serializer =
@@ -353,10 +355,14 @@ let ser_str_of_type ~options ~path ({ ptype_loc = loc } as type_decl) =
     let ty = ser_type_of_decl ~options ~path type_decl in
     let fv = Ppx_deriving.free_vars_in_core_type ty in
     let poly_type = Typ.force_poly @@ Typ.poly fv @@ ty in
-    let var = pvar (Ppx_deriving.mangle_type_decl (`Suffix "to_yojson") type_decl) in
+    let var_s = Ppx_deriving.mangle_type_decl (`Suffix "to_yojson") type_decl in
+    let var = pvar var_s in
     ([],
-     [Vb.mk (Pat.constraint_ var poly_type)
-        (polymorphize [%expr ([%e wrap_runtime serializer])])])
+     [Vb.mk ~attrs:[mkloc "ocaml.warning" !Ast_helper.default_loc, PStr [%str "-39"]]
+        (Pat.constraint_ var poly_type)
+        (polymorphize [%expr ([%e wrap_runtime serializer])])],
+     [Str.value Nonrecursive [Vb.mk [%expr [%e pvar "_"]] [%expr [%e evar var_s]]] ]
+     )
 
 let ser_str_of_type_ext ~options ~path ({ ptyext_path = { loc }} as type_ext) =
   ignore (parse_options options);
@@ -479,7 +485,8 @@ let desu_str_of_type ~options ~path ({ ptype_loc = loc } as type_decl) =
       let orig_mod = Mod.ident (mknoloc lid) in
       let poly_desu = polymorphize [%expr ([%e wrap_runtime desu] : Yojson.Safe.json -> _)] in
       ([Str.module_ (Mb.mk (mknoloc mod_name) orig_mod)],
-       [Vb.mk (pvar of_yojson_name) poly_desu])
+       [Vb.mk (pvar of_yojson_name) poly_desu],
+       [])
     | Some _ ->
       raise_errorf ~loc "%s: extensible type manifest should be a type name" deriver
     | None ->
@@ -510,7 +517,8 @@ let desu_str_of_type ~options ~path ({ ptype_loc = loc } as type_decl) =
         ]))
       in
       ([mod_],
-       [Vb.mk (pvar of_yojson_name) [%expr fun x -> [%e field] x]])
+       [Vb.mk (pvar of_yojson_name) [%expr fun x -> [%e field] x]],
+       [])
   end
   | kind ->
     let desurializer =
@@ -547,10 +555,14 @@ let desu_str_of_type ~options ~path ({ ptype_loc = loc } as type_decl) =
     let ty = desu_type_of_decl ~options ~path type_decl in
     let fv = Ppx_deriving.free_vars_in_core_type ty in
     let poly_type = Typ.force_poly @@ Typ.poly fv @@ ty in
-    let var = pvar (Ppx_deriving.mangle_type_decl (`Suffix "of_yojson") type_decl) in
+    let var_s = Ppx_deriving.mangle_type_decl (`Suffix "of_yojson") type_decl in
+    let var = pvar var_s in
     ([],
-     [Vb.mk (Pat.constraint_ var poly_type)
-            (polymorphize [%expr ([%e wrap_runtime desurializer])])])
+     [Vb.mk ~attrs:[mkloc "ocaml.warning" !Ast_helper.default_loc, PStr [%str "-39"]]
+            (Pat.constraint_ var poly_type)
+            (polymorphize [%expr ([%e wrap_runtime desurializer])]) ],
+     [Str.value Nonrecursive [Vb.mk [%expr [%e pvar "_"]] [%expr [%e evar var_s]]]
+     ])
 
 let desu_str_of_type_ext ~options ~path ({ ptyext_path = { loc } } as type_ext) =
   ignore(parse_options options);
@@ -670,9 +682,9 @@ let desu_sig_of_type ~options ~path type_decl =
 let desu_sig_of_type_ext ~options ~path type_ext = []
 
 let str_of_type ~options ~path type_decl =
-  let (ser_pre, ser_vals) = ser_str_of_type ~options ~path type_decl in
-  let (desu_pre, desu_vals) = desu_str_of_type ~options ~path type_decl in
-  (ser_pre @ desu_pre, ser_vals @ desu_vals)
+  let (ser_pre, ser_vals, ser_post) = ser_str_of_type ~options ~path type_decl in
+  let (desu_pre, desu_vals, desu_post) = desu_str_of_type ~options ~path type_decl in
+  (ser_pre @ desu_pre, ser_vals @ desu_vals, ser_post @ desu_post)
 
 let str_of_type_ext ~options ~path type_ext =
   let ser_vals = ser_str_of_type_ext ~options ~path type_ext in
@@ -688,14 +700,17 @@ let sig_of_type_ext ~options ~path type_ext =
   (desu_sig_of_type_ext ~options ~path type_ext)
 
 let structure f ~options ~path type_ =
-  let (pre, vals) = f ~options ~path type_ in
+  let (pre, vals, post) = f ~options ~path type_ in
   match vals with
-  | [] -> pre
-  | _  -> pre @ [Str.value ?loc:None Recursive vals]
+  | [] -> pre @ post
+  | _  -> pre @ [Str.value ?loc:None Recursive vals] @ post
 
 let on_str_decls f ~options ~path type_decls =
-  let (pre, vals) = List.split (List.map (f ~options ~path) type_decls) in
-  (List.concat pre, List.concat vals)
+  let unzip3 l =
+    List.fold_right (fun (v1, v2, v3) (a1,a2,a3) -> (v1::a1, v2::a2, v3::a3)) l ([],[],[])
+  in
+  let (pre, vals, post) = unzip3 (List.map (f ~options ~path) type_decls) in
+  (List.concat pre, List.concat vals, List.concat post)
 
 let on_sig_decls f ~options ~path type_decls =
   List.concat (List.map (f ~options ~path) type_decls)
