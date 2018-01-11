@@ -419,12 +419,16 @@ let ser_str_of_type_ext ~options ~path ({ ptyext_path = { loc }} as type_ext) =
 
 let error_or typ = [%type: [%t typ] Ppx_deriving_yojson_runtime.error_or]
 
-let desu_type_of_decl ~options ~path type_decl =
+let desu_type_of_decl_poly ~options ~path type_decl type_ =
   ignore (parse_options options);
-  let typ = Ppx_deriving.core_type_of_type_decl type_decl in
   let polymorphize = Ppx_deriving.poly_arrow_of_type_decl
                        (fun var -> [%type: Yojson.Safe.json -> [%t error_or var]]) type_decl in
-  polymorphize [%type: Yojson.Safe.json -> [%t error_or typ]]
+  polymorphize type_
+
+let desu_type_of_decl ~options ~path type_decl =
+  let typ = Ppx_deriving.core_type_of_type_decl type_decl in
+  desu_type_of_decl_poly ~options ~path type_decl [%type: Yojson.Safe.json -> [%t error_or typ]]
+
 
 let desu_str_of_record ~is_strict ~error ~path wrap_record labels =
   let top_error = error path in
@@ -557,11 +561,24 @@ let desu_str_of_type ~options ~path ({ ptype_loc = loc } as type_decl) =
     let poly_type = Typ.force_poly @@ Typ.poly fv @@ ty in
     let var_s = Ppx_deriving.mangle_type_decl (`Suffix "of_yojson") type_decl in
     let var = pvar var_s in
+    let var_s_exn = var_s ^ "_exn" in
+    let { ptype_params; _ } = type_decl in
+    let var_s_exn_args = List.mapi (fun i _ -> argn i |> evar) ptype_params in
+    let var_s_exn_args = var_s_exn_args @ [evar "x"] in
+    let var_s_exn_fun =
+      let rec loop = function
+      | [] -> wrap_runtime ([%expr match  [%e app (evar var_s) var_s_exn_args] with Result.Ok x -> x | Result.Error err -> raise (Failure err)])
+      | hd::tl -> lam (pvar hd) (loop tl)
+      in
+      loop ((List.mapi (fun i _ -> argn i) ptype_params) @ ["x"])
+    in
     ([],
      [Vb.mk ~attrs:[mkloc "ocaml.warning" !Ast_helper.default_loc, PStr [%str "-39"]]
             (Pat.constraint_ var poly_type)
             (polymorphize [%expr ([%e wrap_runtime desurializer])]) ],
      [Str.value Nonrecursive [Vb.mk [%expr [%e pvar "_"]] [%expr [%e evar var_s]]]
+     ;Str.value Nonrecursive [Vb.mk [%expr [%e pvar var_s_exn]] var_s_exn_fun]
+     ;Str.value Nonrecursive [Vb.mk [%expr [%e pvar "_"]] [%expr [%e evar var_s_exn]]]
      ])
 
 let desu_str_of_type_ext ~options ~path ({ ptyext_path = { loc } } as type_ext) =
@@ -651,6 +668,11 @@ let desu_sig_of_type ~options ~path type_decl =
     Sig.value (Val.mk (mknoloc (Ppx_deriving.mangle_type_decl (`Suffix "of_yojson") type_decl))
                       (desu_type_of_decl ~options ~path type_decl))
   in
+  let typ = Ppx_deriving.core_type_of_type_decl type_decl in
+  let of_yojson_exn =
+    Sig.value (Val.mk (mknoloc (Ppx_deriving.mangle_type_decl (`Suffix "of_yojson_exn") type_decl))
+                      (desu_type_of_decl_poly ~options ~path type_decl [%type: Yojson.Safe.json -> [%t typ]]))
+  in
   match type_decl.ptype_kind with
   | Ptype_open ->
     let mod_name = Ppx_deriving.mangle_type_decl
@@ -677,7 +699,7 @@ let desu_sig_of_type ~options ~path type_decl =
       ]))
     in
     [mod_; of_yojson]
-  | _ -> [of_yojson]
+  | _ -> [of_yojson; of_yojson_exn]
 
 let desu_sig_of_type_ext ~options ~path type_ext = []
 
