@@ -1,11 +1,21 @@
 open OUnit2
 
-type json = [%import: Yojson.Safe.json] [@@deriving show]
+type json =
+  [ `Assoc of (string * json) list
+  | `Bool of bool
+  | `Float of float
+  | `Int of int
+  | `Intlit of string
+  | `List of json list
+  | `Null
+  | `String of string
+  | `Tuple of json list
+  | `Variant of string * json option ]
+  [@@deriving show]
 
 let show_error_or =
   let module M = struct
-    type 'a error_or =
-      [%import: 'a Ppx_deriving_yojson_runtime.error_or] [@@deriving show]
+    type 'a error_or = ('a, string) Result.result [@@deriving show]
   end in
   M.show_error_or
 
