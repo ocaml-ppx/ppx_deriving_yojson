@@ -14,5 +14,5 @@ script:
   - opam switch $OCAML
   - eval `opam config env`
   - opam pin add -n -k path ppx_deriving_yojson .
-  - opam install --deps-only -d -t ppx_deriving_yojson
+  - opam install --deps-only -d ppx_deriving_yojson
   - opam install -d -t -v ppx_deriving_yojson
