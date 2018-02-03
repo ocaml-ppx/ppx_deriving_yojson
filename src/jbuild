@@ -8,7 +8,7 @@
   (public_name ppx_deriving_yojson.runtime)
   (synopsis "Runtime components of [@@deriving yojson]")
   (modules (ppx_deriving_yojson_runtime))
-  (libraries (ppx_deriving.runtime yojson result))))
+  (libraries (ppx_deriving.runtime result))))
 
 (library
  ((name ppx_deriving_yojson)
@@ -16,6 +16,6 @@
   (synopsis "[@@deriving yojson]")
   (libraries (ppx_deriving.api))
   (preprocess (pps (ppx_tools_versioned.metaquot_405)))
-  (ppx_runtime_libraries (ppx_deriving_yojson_runtime))
+  (ppx_runtime_libraries (ppx_deriving_yojson_runtime yojson))
   (modules (ppx_deriving_yojson))
   (kind ppx_deriver)))
