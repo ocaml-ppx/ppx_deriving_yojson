@@ -7,7 +7,7 @@
 
 (executable
  ((name test_ppx_yojson)
-  (libraries (oUnit))
+  (libraries (oUnit result))
   (preprocess (pps (ppx_deriving.show ppx_deriving_yojson)))))
 
 (alias
