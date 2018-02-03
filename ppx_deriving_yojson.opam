@@ -16,7 +16,8 @@ depends: [
   "yojson"
   "result"
   "ppx_deriving" {>= "4.0" & < "5.0"}
-  "ppx_tools_versioned"
+  "ppx_tools"    {build}
+  "ppxfind"      {build}
   "jbuilder"     {build}
   "cppo"         {build}
   "ounit"        {test}
