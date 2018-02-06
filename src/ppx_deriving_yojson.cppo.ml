@@ -46,11 +46,13 @@ let attr_default attrs =
 
 let parse_options options =
   let strict = ref true in
+  let fields = ref false in
   options |> List.iter (fun (name, expr) ->
     match name with
     | "strict" -> strict := Ppx_deriving.Arg.(get_expr ~deriver bool) expr
+    | "fields" -> fields := Ppx_deriving.Arg.(get_expr ~deriver bool) expr
     | _ -> raise_errorf ~loc:expr.pexp_loc "%s does not support option %s" deriver name);
-  !strict
+  (!strict, !fields)
 
 let rec ser_expr_of_typ typ =
   let attr_int_encoding typ =
@@ -470,7 +472,7 @@ let desu_str_of_record ~is_strict ~error ~path wrap_record labels =
 
 
 let desu_str_of_type ~options ~path ({ ptype_loc = loc } as type_decl) =
-  let is_strict = parse_options options in
+  let (is_strict, _) = parse_options options in
   let path = path @ [type_decl.ptype_name.txt] in
   let error path = [%expr Result.Error [%e str (String.concat "." path)]] in
   let top_error = error path in
@@ -703,10 +705,58 @@ let desu_sig_of_type ~options ~path type_decl =
 
 let desu_sig_of_type_ext ~options ~path type_ext = []
 
+let yojson_str_fields ~options ~path ({ ptype_loc = loc } as type_decl) =
+  let (_, want_fields) =  parse_options options in
+  match want_fields, type_decl.ptype_kind with
+  | false, _ | true, Ptype_open -> []
+  | true, kind ->
+    match kind, type_decl.ptype_manifest with
+    | Ptype_record labels, _ ->
+      let fields =
+        labels |> List.map (fun { pld_name = { txt = name }; pld_type; pld_attributes } ->
+          [%expr [%e str (attr_key name pld_attributes)]])
+      in
+      let flist = List.fold_right (fun n acc -> [%expr [%e n] :: [%e  acc]])
+        fields [%expr []]
+      in
+        [
+          Str.module_ (Mb.mk (mknoloc (Ppx_deriving.mangle_type_decl (`Prefix "Yojson_fields") type_decl))
+                      (Mod.structure [
+            Str.value Nonrecursive [Vb.mk [%expr [%e pvar "keys"]] [%expr [%e flist]]]
+          ; Str.value Nonrecursive [Vb.mk [%expr [%e pvar "_"]] [%expr [%e evar "keys"]]]
+          ]))
+        ]
+    | _ -> []
+
+let yojson_sig_fields ~options ~path ({ ptype_loc = loc } as type_decl) =
+  let (_, want_fields) =  parse_options options in
+  match want_fields, type_decl.ptype_kind with
+  | false, _ | true, Ptype_open -> []
+  | true, kind ->
+    match kind, type_decl.ptype_manifest with
+    | Ptype_record _, _ ->
+      [
+        Sig.module_ (Md.mk (mknoloc (Ppx_deriving.mangle_type_decl (`Prefix "Yojson_fields") type_decl))
+                    (Mty.signature [
+          Sig.value (Val.mk (mknoloc "keys") [%type: string list]) ]))
+      ]
+    | _ -> []
+
 let str_of_type ~options ~path type_decl =
   let (ser_pre, ser_vals, ser_post) = ser_str_of_type ~options ~path type_decl in
   let (desu_pre, desu_vals, desu_post) = desu_str_of_type ~options ~path type_decl in
-  (ser_pre @ desu_pre, ser_vals @ desu_vals, ser_post @ desu_post)
+  let fields_post = yojson_str_fields ~options ~path type_decl in
+  (ser_pre @ desu_pre, ser_vals @ desu_vals, ser_post @ desu_post @ fields_post)
+
+let str_of_type_to_yojson ~options ~path type_decl =
+  let (ser_pre, ser_vals, ser_post) = ser_str_of_type ~options ~path type_decl in
+  let fields_post = yojson_str_fields ~options ~path type_decl in
+  (ser_pre, ser_vals, ser_post @ fields_post)
+
+let str_of_type_of_yojson ~options ~path type_decl =
+  let (desu_pre, desu_vals, desu_post) = desu_str_of_type ~options ~path type_decl in
+  let fields_post = yojson_str_fields ~options ~path type_decl in
+  (desu_pre, desu_vals, desu_post @ fields_post)
 
 let str_of_type_ext ~options ~path type_ext =
   let ser_vals = ser_str_of_type_ext ~options ~path type_ext in
@@ -715,7 +765,16 @@ let str_of_type_ext ~options ~path type_ext =
 
 let sig_of_type ~options ~path type_decl =
   (ser_sig_of_type ~options ~path type_decl) @
-  (desu_sig_of_type ~options ~path type_decl)
+  (desu_sig_of_type ~options ~path type_decl) @
+  (yojson_sig_fields ~options ~path type_decl)
+
+let sig_of_type_to_yojson ~options ~path type_decl =
+  (ser_sig_of_type ~options ~path type_decl) @
+  (yojson_sig_fields ~options ~path type_decl)
+
+let sig_of_type_of_yojson ~options ~path type_decl =
+  (desu_sig_of_type ~options ~path type_decl) @
+  (yojson_sig_fields ~options ~path type_decl)
 
 let sig_of_type_ext ~options ~path type_ext =
   (ser_sig_of_type_ext ~options ~path type_ext) @
@@ -749,18 +808,18 @@ let () =
   Ppx_deriving.(register
    (create "to_yojson"
     ~core_type:ser_expr_of_typ
-    ~type_decl_str:(structure (on_str_decls ser_str_of_type))
+    ~type_decl_str:(structure (on_str_decls str_of_type_to_yojson))
     ~type_ext_str:ser_str_of_type_ext
-    ~type_decl_sig:(on_sig_decls ser_sig_of_type)
+    ~type_decl_sig:(on_sig_decls sig_of_type_to_yojson)
     ~type_ext_sig:ser_sig_of_type_ext
     ()
   ));
   Ppx_deriving.(register
    (create "of_yojson"
     ~core_type:(fun typ -> wrap_runtime (desu_expr_of_typ ~path:[] typ))
-    ~type_decl_str:(structure (on_str_decls desu_str_of_type))
+    ~type_decl_str:(structure (on_str_decls str_of_type_of_yojson))
     ~type_ext_str:desu_str_of_type_ext
-    ~type_decl_sig:(on_sig_decls desu_sig_of_type)
+    ~type_decl_sig:(on_sig_decls sig_of_type_of_yojson)
     ~type_ext_sig:desu_sig_of_type_ext
     ()
   ))

@@ -88,6 +88,12 @@ Record variants are currently not supported for extensible variant types.
 
 By default, objects are deserialized strictly; that is, all keys in the object have to correspond to fields of the record. Passing `strict = false` as an option to the deriver  (i.e. `[@@deriving yojson { strict = false }]`) changes the behavior to ignore any unknown fields.
 
+#### Optional fields module
+Sometimes a list of JSON key names is useful, especially when using the `[@key ...]` feature (see the options section).
+This is supported via the `fields` deriver option,  eg. `[@@deriving yojson { fields = true }]`.
+When enabled the `Yosjon_fields_ty` module is created containing the value `keys` which as a `string list` of JSON keys.
+Note that if `ty` is `t` then the module is called `Yosjon_fields` instead
+
 ### Options
 
 Option attribute names may be prefixed with `yojson.` to avoid conflicts with other derivers.
