@@ -29,7 +29,7 @@ Syntax
 _deriving yojson_ generates three functions per type:
 
 ``` ocaml
-# #require "ppx_deriving";;
+# #require "ppx_deriving_yojson";;
 # type ty = .. [@@deriving yojson];;
 val ty_of_yojson : Yojson.Safe.json -> (ty, string) Result.result
 val ty_of_yojson_exn : Yojson.Safe.json -> ty
