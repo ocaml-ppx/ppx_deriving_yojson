@@ -88,12 +88,6 @@ Record variants are currently not supported for extensible variant types.
 
 By default, objects are deserialized strictly; that is, all keys in the object have to correspond to fields of the record. Passing `strict = false` as an option to the deriver  (i.e. `[@@deriving yojson { strict = false }]`) changes the behavior to ignore any unknown fields.
 
-#### Optional fields module
-Sometimes a list of JSON key names is useful, especially when using the `[@key ...]` feature (see the options section).
-This is supported via the `fields` deriver option,  eg. `[@@deriving yojson { fields = true }]`.
-When enabled the `Yosjon_fields_ty` module is created containing the value `keys` which as a `string list` of JSON keys.
-Note that if `ty` is `t` then the module is called `Yosjon_fields` instead
-
 ### Options
 
 Option attribute names may be prefixed with `yojson.` to avoid conflicts with other derivers.
@@ -137,6 +131,30 @@ type pagination = {
 ```
 
 Fields with default values are not required to be present in inputs and will not be emitted in outputs.
+
+#### `Yojson_fields` module
+
+The `fields` deriver option can be used to generate a module containing all JSON key names, e.g.
+
+```ocaml
+type foo = {
+ fvalue : float;
+ svalue : string [@key "@svalue_json"];
+ ivalue : int;
+} [@@deriving to_yojson { strict = false, fields = true } ]
+end
+```
+
+defines the following module:
+
+```ocaml
+module Yojson_fields_foo = struct
+  let keys = ["fvalue"; "@svalue_json"; "ivalue"] 
+  let _ = keys 
+end
+```
+
+When the type is named `t`, the module is named just `Yojson_fields`.
 
 License
 -------
