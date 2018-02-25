@@ -46,13 +46,13 @@ let attr_default attrs =
 
 let parse_options options =
   let strict = ref true in
-  let fields = ref false in
+  let meta = ref false in
   options |> List.iter (fun (name, expr) ->
     match name with
     | "strict" -> strict := Ppx_deriving.Arg.(get_expr ~deriver bool) expr
-    | "fields" -> fields := Ppx_deriving.Arg.(get_expr ~deriver bool) expr
+    | "meta" -> meta := Ppx_deriving.Arg.(get_expr ~deriver bool) expr
     | _ -> raise_errorf ~loc:expr.pexp_loc "%s does not support option %s" deriver name);
-  (!strict, !fields)
+  (!strict, !meta)
 
 let rec ser_expr_of_typ typ =
   let attr_int_encoding typ =
@@ -706,8 +706,8 @@ let desu_sig_of_type ~options ~path type_decl =
 let desu_sig_of_type_ext ~options ~path type_ext = []
 
 let yojson_str_fields ~options ~path ({ ptype_loc = loc } as type_decl) =
-  let (_, want_fields) =  parse_options options in
-  match want_fields, type_decl.ptype_kind with
+  let (_, want_meta) =  parse_options options in
+  match want_meta, type_decl.ptype_kind with
   | false, _ | true, Ptype_open -> []
   | true, kind ->
     match kind, type_decl.ptype_manifest with
@@ -720,7 +720,7 @@ let yojson_str_fields ~options ~path ({ ptype_loc = loc } as type_decl) =
         fields [%expr []]
       in
         [
-          Str.module_ (Mb.mk (mknoloc (Ppx_deriving.mangle_type_decl (`Prefix "Yojson_fields") type_decl))
+          Str.module_ (Mb.mk (mknoloc (Ppx_deriving.mangle_type_decl (`Prefix "Yojson_meta") type_decl))
                       (Mod.structure [
             Str.value Nonrecursive [Vb.mk [%expr [%e pvar "keys"]] [%expr [%e flist]]]
           ; Str.value Nonrecursive [Vb.mk [%expr [%e pvar "_"]] [%expr [%e evar "keys"]]]
@@ -729,14 +729,14 @@ let yojson_str_fields ~options ~path ({ ptype_loc = loc } as type_decl) =
     | _ -> []
 
 let yojson_sig_fields ~options ~path ({ ptype_loc = loc } as type_decl) =
-  let (_, want_fields) =  parse_options options in
-  match want_fields, type_decl.ptype_kind with
+  let (_, want_meta) =  parse_options options in
+  match want_meta, type_decl.ptype_kind with
   | false, _ | true, Ptype_open -> []
   | true, kind ->
     match kind, type_decl.ptype_manifest with
     | Ptype_record _, _ ->
       [
-        Sig.module_ (Md.mk (mknoloc (Ppx_deriving.mangle_type_decl (`Prefix "Yojson_fields") type_decl))
+        Sig.module_ (Md.mk (mknoloc (Ppx_deriving.mangle_type_decl (`Prefix "Yojson_meta") type_decl))
                     (Mty.signature [
           Sig.value (Val.mk (mknoloc "keys") [%type: string list]) ]))
       ]
