@@ -132,6 +132,30 @@ type pagination = {
 
 Fields with default values are not required to be present in inputs and will not be emitted in outputs.
 
+#### `Yojson_meta` module
+
+The `meta` deriver option can be used to generate a module containing all JSON key names, e.g.
+
+```ocaml
+type foo = {
+ fvalue : float;
+ svalue : string [@key "@svalue_json"];
+ ivalue : int;
+} [@@deriving to_yojson { strict = false, fields = true } ]
+end
+```
+
+defines the following module:
+
+```ocaml
+module Yojson_meta_foo = struct
+  let keys = ["fvalue"; "@svalue_json"; "ivalue"] 
+  let _ = keys 
+end
+```
+
+When the type is named `t`, the module is named just `Yojson_meta`.
+
 License
 -------
 
