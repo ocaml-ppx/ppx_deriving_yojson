@@ -23,6 +23,10 @@ Usage
 
 In order to use _deriving yojson_, require the package `ppx_deriving_yojson`.
 
+If you are using [jbuilder](https://github.com/ocaml/dune), add `ppx_deriving_yojson`
+to the `pps` section of `preprocess`. Ensure also that `yojson` and `ppx_deriving_yojson.runtime`
+are listed in the libraries.
+
 Syntax
 ------
 
