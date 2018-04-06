@@ -1,11 +1,3 @@
-#if OCAML_VERSION < (4, 03, 0)
-#define Type_Nonrecursive
-#define Pconst_string Const_string
-#define Pcstr_tuple(x) x
-#else
-#define Type_Nonrecursive Nonrecursive
-#endif
-
 #if OCAML_VERSION >= (4, 06, 0)
 #define Rtag(label, attrs, has_empty, args) \
         Rtag({ txt = label }, attrs, has_empty, args)
@@ -311,7 +303,7 @@ let ser_str_of_type ~options ~path ({ ptype_loc = loc } as type_decl) =
       let mod_ =
         Str.module_ (Mb.mk (mknoloc mod_name)
                     (Mod.structure [
-          Str.type_ Type_Nonrecursive [typ];
+          Str.type_ Nonrecursive [typ];
           Str.value Nonrecursive [record];
         ]))
       in
@@ -340,13 +332,11 @@ let ser_str_of_type ~options ~path ({ ptype_loc = loc } as type_decl) =
             Exp.case
               (pconstr name' (List.mapi (fun i _ -> pvar (argn i)) args))
               [%expr `List ((`String [%e str json_name]) :: [%e list arg_exprs])]
-#if OCAML_VERSION >= (4, 03, 0)
           | Pcstr_record labels ->
             let arg_expr = ser_str_of_record (argn 0) labels in
             Exp.case
               (pconstr name' [pvar(argn 0)])
               [%expr `List ((`String [%e str json_name]) :: [%e list[arg_expr]])]
-#endif
           )
         |> Exp.function_
       | Ptype_record labels, _ ->
@@ -391,10 +381,8 @@ let ser_str_of_type_ext ~options ~path ({ ptyext_path = { loc }} as type_ext) =
               Exp.case
                 (pconstr name' (List.mapi (fun i _ -> pvar (argn i)) args))
                 [%expr `List ((`String [%e str json_name]) :: [%e list arg_exprs])]
-#if OCAML_VERSION >= (4, 03, 0)
             | Pcstr_record _ ->
               raise_errorf ~loc "%s: record variants are not supported in extensible types" deriver
-#endif
           in
           case :: acc_cases) type_ext.ptyext_constructors []
     in
@@ -518,7 +506,7 @@ let desu_str_of_type ~options ~path ({ ptype_loc = loc } as type_decl) =
       let mod_ =
         Str.module_ (Mb.mk (mknoloc mod_name)
                     (Mod.structure [
-          Str.type_ Type_Nonrecursive [typ];
+          Str.type_ Nonrecursive [typ];
           Str.value Nonrecursive [record];
         ]))
       in
@@ -540,7 +528,6 @@ let desu_str_of_type ~options ~path ({ ptype_loc = loc } as type_decl) =
               [%pat? `List ((`String [%p pstr (attr_name name' pcd_attributes)]) ::
                                      [%p plist (List.mapi (fun i _ -> pvar (argn i)) args)])]
               (desu_fold ~path (fun x -> constr name' x) args)
-#if OCAML_VERSION >= (4, 03, 0)
           | Pcstr_record labels ->
             let wrap_record r = constr name' [r] in
             let sub =
@@ -549,7 +536,6 @@ let desu_str_of_type ~options ~path ({ ptype_loc = loc } as type_decl) =
               [%pat? `List ((`String [%p pstr (attr_name name' pcd_attributes)]) ::
                               [%p plist [pvar (argn 0)]])]
               [%expr [%e sub] [%e evar (argn 0)] ]
-#endif
           ) constrs
         in
         Exp.function_ (cases @ [Exp.case [%pat? _] top_error])
@@ -601,10 +587,8 @@ let desu_str_of_type_ext ~options ~path ({ ptyext_path = { loc } } as type_ext) 
                 [%pat? `List ((`String [%p pstr (attr_name name' pext_attributes)]) ::
                                        [%p plist (List.mapi (fun i _ -> pvar (argn i)) args)])]
                 (desu_fold ~path (fun x -> constr name' x) args)
-#if OCAML_VERSION >= (4, 03, 0)
             | Pcstr_record _ ->
               raise_errorf ~loc "%s: record variants are not supported in extensible types" deriver
-#endif
           in
           case :: acc_cases)
         type_ext.ptyext_constructors []
@@ -655,7 +639,7 @@ let ser_sig_of_type ~options ~path type_decl =
     let mod_ =
       Sig.module_ (Md.mk (mknoloc mod_name)
                   (Mty.signature [
-        Sig.type_ Type_Nonrecursive [typ];
+        Sig.type_ Nonrecursive [typ];
         Sig.value record;
       ]))
     in
@@ -696,7 +680,7 @@ let desu_sig_of_type ~options ~path type_decl =
     let mod_ =
       Sig.module_ (Md.mk (mknoloc mod_name)
                   (Mty.signature [
-        Sig.type_ Type_Nonrecursive [typ];
+        Sig.type_ Nonrecursive [typ];
         Sig.value record;
       ]))
     in
