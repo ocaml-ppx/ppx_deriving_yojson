@@ -23,4 +23,7 @@ release:
 	opam publish submit $(NAME_VERSION)
 	rm -rf $(NAME_VERSION)
 
-.PHONY: gh-pages release
+.PHONY: gh-pages release all-supported-ocaml-versions
+
+all-supported-ocaml-versions:
+	jbuilder build @install @runtest --workspace jbuild-workspace.dev
