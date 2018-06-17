@@ -5,7 +5,7 @@ test:
 	jbuilder runtest
 
 doc:
-	jbuilder build @odc
+	jbuilder build @doc
 
 clean:
 	jbuilder clean
