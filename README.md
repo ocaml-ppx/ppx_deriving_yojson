@@ -7,7 +7,7 @@ from an OCaml type definition.
 
 Sponsored by [Evil Martians](http://evilmartians.com).
 
-[pd]: https://github.com/whitequark/ppx_deriving
+[pd]: https://github.com/ocaml-ppx/ppx_deriving
 [json]: http://tools.ietf.org/html/rfc4627
 [yojson]: http://mjambon.com/yojson.html
 
@@ -149,8 +149,8 @@ defines the following module:
 
 ```ocaml
 module Yojson_meta_foo = struct
-  let keys = ["fvalue"; "@svalue_json"; "ivalue"] 
-  let _ = keys 
+  let keys = ["fvalue"; "@svalue_json"; "ivalue"]
+  let _ = keys
 end
 ```
 
