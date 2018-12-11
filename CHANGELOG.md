@@ -1,6 +1,32 @@
 Changelog
 =========
 
+Unreleased
+---
+
+  * Add `let _ = to_yojson / of_yojson` to generated code to avoid warnings when
+    they aren't used
+    (#68)
+    @stevebleazard
+  * Fix bug where doing [@@deriving of_yojson] causes an unused rec warning
+    (#68)
+    @stevebleazard
+  * Add generated `ty_of_yojson_exn` to raise an exception rather than return an
+    error
+    (#57, #68)
+    @stevebleazard
+  * Port `ppx_deriving_yojson` to `dune`
+    (#69, #85)
+    @rgrinberg, @anmonteiro
+  * Added deriver option `fields` to generate a `Yojson_meta` module containing
+    all JSON key names.
+    (#70)
+    @stevebleazard
+  * Remove cppo that included support for versions no longer supported by
+    `ppx_deriving_yojson`
+    (#75)
+    @rgrinberg
+
 3.1
 ---
 

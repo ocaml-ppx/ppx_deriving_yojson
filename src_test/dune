@@ -1,0 +1,15 @@
+(rule
+ (deps test_ppx_yojson.cppo.ml)
+ (targets test_ppx_yojson.ml)
+ (action (run %{bin:cppo} -V OCAML:%{ocaml_version} %{deps} -o %{targets})))
+
+(executable
+ (name test_ppx_yojson)
+ (libraries oUnit result)
+ (preprocess (pps ppx_deriving.show ppx_deriving_yojson))
+ (flags (:standard -w -9-39-27-34-37)))
+
+(alias
+ (name runtest)
+ (deps test_ppx_yojson.exe)
+ (action (run %{deps})))

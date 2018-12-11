@@ -3,7 +3,6 @@
         Rtag({ txt = label }, attrs, has_empty, args)
 #endif
 
-
 open Longident
 open Location
 open Asttypes
@@ -226,7 +225,7 @@ and desu_expr_of_typ ~path typ =
 let wrap_runtime decls =
   Ppx_deriving.sanitize ~module_:(Lident "Ppx_deriving_yojson_runtime") decls
 
-let ser_type_of_decl ~options ~path type_decl =
+let ser_type_of_decl ~options ~path:_ type_decl =
   ignore (parse_options options);
   let typ = Ppx_deriving.core_type_of_type_decl type_decl in
   let polymorphize = Ppx_deriving.poly_arrow_of_type_decl
@@ -235,7 +234,7 @@ let ser_type_of_decl ~options ~path type_decl =
 
 let ser_str_of_record varname labels =
   let fields =
-    labels |> List.mapi (fun i { pld_name = { txt = name }; pld_type; pld_attributes } ->
+    labels |> List.mapi (fun _i { pld_name = { txt = name }; pld_type; pld_attributes } ->
       let field  = Exp.field (evar varname) (mknoloc (Lident name)) in
       let result = [%expr [%e str (attr_key name pld_attributes)],
                     [%e ser_expr_of_typ pld_type] [%e field]] in
@@ -264,7 +263,7 @@ let ser_str_of_type ~options ~path ({ ptype_loc = loc } as type_decl) =
       (`PrefixSuffix ("M", "to_yojson")) type_decl
     in
     match type_decl.ptype_manifest with
-    | Some ({ ptyp_desc = Ptyp_constr ({ txt = lid }, args) } as manifest) ->
+    | Some ({ ptyp_desc = Ptyp_constr ({ txt = lid }, _args) } as manifest) ->
       let ser = ser_expr_of_typ manifest in
       let lid = Ppx_deriving.mangle_lid (`PrefixSuffix ("M", "to_yojson")) lid in
       let orig_mod = Mod.ident (mknoloc lid) in
@@ -356,7 +355,7 @@ let ser_str_of_type ~options ~path ({ ptype_loc = loc } as type_decl) =
      [Str.value Nonrecursive [Vb.mk [%expr [%e pvar "_"]] [%expr [%e evar var_s]]] ]
      )
 
-let ser_str_of_type_ext ~options ~path ({ ptyext_path = { loc }} as type_ext) =
+let ser_str_of_type_ext ~options ~path:_ ({ ptyext_path = { loc }} as type_ext) =
   ignore (parse_options options);
   let serializer =
     let pats =
@@ -409,7 +408,7 @@ let ser_str_of_type_ext ~options ~path ({ ptyext_path = { loc }} as type_ext) =
 
 let error_or typ = [%type: [%t typ] Ppx_deriving_yojson_runtime.error_or]
 
-let desu_type_of_decl_poly ~options ~path type_decl type_ =
+let desu_type_of_decl_poly ~options ~path:_ type_decl type_ =
   ignore (parse_options options);
   let polymorphize = Ppx_deriving.poly_arrow_of_type_decl
                        (fun var -> [%type: Yojson.Safe.json -> [%t error_or var]]) type_decl in
@@ -473,7 +472,7 @@ let desu_str_of_type ~options ~path ({ ptype_loc = loc } as type_decl) =
       (`PrefixSuffix ("M", "of_yojson")) type_decl
     in
     match type_decl.ptype_manifest with
-    | Some ({ ptyp_desc = Ptyp_constr ({ txt = lid }, args) } as manifest) ->
+    | Some ({ ptyp_desc = Ptyp_constr ({ txt = lid }, _args) } as manifest) ->
       let desu = desu_expr_of_typ ~path manifest in
       let lid = Ppx_deriving.mangle_lid (`PrefixSuffix ("M", "of_yojson")) lid in
       let orig_mod = Mod.ident (mknoloc lid) in
@@ -647,7 +646,7 @@ let ser_sig_of_type ~options ~path type_decl =
   | _ -> [to_yojson]
 
 
-let ser_sig_of_type_ext ~options ~path type_ext = []
+let ser_sig_of_type_ext ~options:_ ~path:_ _type_ext = []
 
 let desu_sig_of_type ~options ~path type_decl =
   let of_yojson =
@@ -687,9 +686,9 @@ let desu_sig_of_type ~options ~path type_decl =
     [mod_; of_yojson]
   | _ -> [of_yojson; of_yojson_exn]
 
-let desu_sig_of_type_ext ~options ~path type_ext = []
+let desu_sig_of_type_ext ~options:_ ~path:_ _type_ext = []
 
-let yojson_str_fields ~options ~path ({ ptype_loc = loc } as type_decl) =
+let yojson_str_fields ~options ~path:_ type_decl =
   let (_, want_meta) =  parse_options options in
   match want_meta, type_decl.ptype_kind with
   | false, _ | true, Ptype_open -> []
@@ -697,7 +696,7 @@ let yojson_str_fields ~options ~path ({ ptype_loc = loc } as type_decl) =
     match kind, type_decl.ptype_manifest with
     | Ptype_record labels, _ ->
       let fields =
-        labels |> List.map (fun { pld_name = { txt = name }; pld_type; pld_attributes } ->
+        labels |> List.map (fun { pld_name = { txt = name }; pld_attributes } ->
           [%expr [%e str (attr_key name pld_attributes)]])
       in
       let flist = List.fold_right (fun n acc -> [%expr [%e n] :: [%e  acc]])
@@ -712,7 +711,7 @@ let yojson_str_fields ~options ~path ({ ptype_loc = loc } as type_decl) =
         ]
     | _ -> []
 
-let yojson_sig_fields ~options ~path ({ ptype_loc = loc } as type_decl) =
+let yojson_sig_fields ~options ~path:_ type_decl =
   let (_, want_meta) =  parse_options options in
   match want_meta, type_decl.ptype_kind with
   | false, _ | true, Ptype_open -> []
