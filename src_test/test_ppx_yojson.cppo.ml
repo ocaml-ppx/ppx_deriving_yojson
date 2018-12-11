@@ -70,11 +70,11 @@ type rv = RA | RB of int | RC of int * string | RD of { z : string }
 [@@deriving show, yojson]
 #endif
 
-let test_unit ctxt =
+let test_unit _ctxt =
   assert_roundtrip pp_u u_to_yojson u_of_yojson
     () "null"
 
-let test_int ctxt =
+let test_int _ctxt =
   assert_roundtrip pp_i1 i1_to_yojson i1_of_yojson
                    42 "42";
   assert_roundtrip pp_i2 i2_to_yojson i2_of_yojson
@@ -94,7 +94,7 @@ let test_int ctxt =
   assert_roundtrip pp_i9 i9_to_yojson i9_of_yojson
                    42n "\"42\""
 
-let test_int_edge ctxt =
+let test_int_edge _ctxt =
   assert_roundtrip pp_i2 i2_to_yojson i2_of_yojson
                    0x7fffffffl "2147483647";
   assert_roundtrip pp_i2 i2_to_yojson i2_of_yojson
@@ -104,64 +104,64 @@ let test_int_edge ctxt =
   assert_roundtrip pp_i4 i4_to_yojson i4_of_yojson
                    (Int64.neg 0x8000000000000000L) "-9223372036854775808"
 
-let test_float ctxt =
+let test_float _ctxt =
   assert_roundtrip pp_f f_to_yojson f_of_yojson
                    1.0 "1.0";
   assert_equal ~printer:(show_error_or pp_f)
                (Result.Ok 1.0)
                (f_of_yojson (`Int 1))
 
-let test_bool ctxt =
+let test_bool _ctxt =
   assert_roundtrip pp_b b_to_yojson b_of_yojson
                    true "true";
   assert_roundtrip pp_b b_to_yojson b_of_yojson
                    false "false"
 
-let test_char ctxt =
+let test_char _ctxt =
   assert_roundtrip pp_c c_to_yojson c_of_yojson
                    'c' "\"c\"";
   assert_failure   pp_c c_of_yojson
                    "Test_ppx_yojson.c" "\"xxx\""
 
-let test_string ctxt =
+let test_string _ctxt =
   assert_roundtrip pp_s s_to_yojson s_of_yojson
                    "foo" "\"foo\"";
   assert_roundtrip pp_y y_to_yojson y_of_yojson
                    (Bytes.of_string "foo") "\"foo\""
 
-let test_ref ctxt =
+let test_ref _ctxt =
   assert_roundtrip pp_xr xr_to_yojson xr_of_yojson
                    (ref 42) "42"
 
-let test_option ctxt =
+let test_option _ctxt =
   assert_roundtrip pp_xo xo_to_yojson xo_of_yojson
                    (Some 42) "42";
   assert_roundtrip pp_xo xo_to_yojson xo_of_yojson
                    None "null"
 
-let test_list ctxt =
+let test_list _ctxt =
   assert_roundtrip pp_xl xl_to_yojson xl_of_yojson
                    [] "[]";
   assert_roundtrip pp_xl xl_to_yojson xl_of_yojson
                    [42; 43] "[42, 43]"
 
-let test_array ctxt =
+let test_array _ctxt =
   assert_roundtrip pp_xa xa_to_yojson xa_of_yojson
                    [||] "[]";
   assert_roundtrip pp_xa xa_to_yojson xa_of_yojson
                    [|42; 43|] "[42, 43]"
 
-let test_tuple ctxt =
+let test_tuple _ctxt =
   assert_roundtrip pp_xt xt_to_yojson xt_of_yojson
                    (42, 43) "[42, 43]"
 
-let test_ptyp ctxt =
+let test_ptyp _ctxt =
   assert_roundtrip (pp_p pp_i1) (p_to_yojson i1_to_yojson) (p_of_yojson i1_of_yojson)
                    (Some 42) "42";
   assert_roundtrip (pp_p pp_i1) (p_to_yojson i1_to_yojson) (p_of_yojson i1_of_yojson)
                    None "null"
 
-let test_pvar ctxt =
+let test_pvar _ctxt =
   assert_roundtrip pp_pv pv_to_yojson pv_of_yojson
                    `A "[\"A\"]";
   assert_roundtrip pp_pv pv_to_yojson pv_of_yojson
@@ -178,7 +178,7 @@ let test_pvar ctxt =
                (Result.Error "Test_ppx_yojson.pvd")
                (pvd_of_yojson (`List [`String "D"]))
 
-let test_var ctxt =
+let test_var _ctxt =
   assert_roundtrip pp_v v_to_yojson v_of_yojson
                    A "[\"A\"]";
   assert_roundtrip pp_v v_to_yojson v_of_yojson
@@ -186,12 +186,12 @@ let test_var ctxt =
   assert_roundtrip pp_v v_to_yojson v_of_yojson
                    (C (42, "foo")) "[\"C\", 42, \"foo\"]"
 
-let test_rec ctxt =
+let test_rec _ctxt =
   assert_roundtrip pp_r r_to_yojson r_of_yojson
                    {x=42; y="foo"} "{\"x\":42,\"y\":\"foo\"}"
 
 #if OCAML_VERSION >= (4, 03, 0)
-let test_recvar ctxt =
+let test_recvar _ctxt =
   assert_roundtrip pp_rv rv_to_yojson rv_of_yojson
                    RA "[\"RA\"]";
   assert_roundtrip pp_rv rv_to_yojson rv_of_yojson
@@ -207,18 +207,18 @@ type geo = {
   lon : float [@key "Longitude"] ;
 }
 [@@deriving yojson, show]
-let test_key ctxt =
+let test_key _ctxt =
   assert_roundtrip pp_geo geo_to_yojson geo_of_yojson
                    {lat=35.6895; lon=139.6917}
                    "{\"Latitude\":35.6895,\"Longitude\":139.6917}"
 
-let test_field_err ctxt =
+let test_field_err _ctxt =
   assert_equal ~printer:(show_error_or pp_geo)
                (Result.Error "Test_ppx_yojson.geo.lat")
                (geo_of_yojson (`Assoc ["Longitude", (`Float 42.0)]))
 
 type id = Yojson.Safe.json [@@deriving yojson]
-let test_id ctxt =
+let test_id _ctxt =
   assert_roundtrip pp_json id_to_yojson id_of_yojson
                    (`Int 42) "42"
 
@@ -226,7 +226,7 @@ type custvar =
 | Tea   of string [@name "tea"]
 | Vodka [@name "vodka"]
 [@@deriving yojson, show]
-let test_custvar ctxt =
+let test_custvar _ctxt =
   assert_roundtrip pp_custvar custvar_to_yojson custvar_of_yojson
                    (Tea "oolong") "[\"tea\", \"oolong\"]";
   assert_roundtrip pp_custvar custvar_to_yojson custvar_of_yojson
@@ -237,7 +237,7 @@ type custpvar =
 | `Beer  of string * float [@name "beer"]
 | `Vodka [@name "vodka"]
 ] [@@deriving yojson, show]
-let test_custpvar ctxt =
+let test_custpvar _ctxt =
   assert_roundtrip pp_custpvar custpvar_to_yojson custpvar_of_yojson
                    (`Tea "earl_grey") "[\"tea\", \"earl_grey\"]";
   assert_roundtrip pp_custpvar custpvar_to_yojson custpvar_of_yojson
@@ -248,16 +248,16 @@ let test_custpvar ctxt =
 type default = {
   def : int [@default 42];
 } [@@deriving yojson, show]
-let test_default ctxt =
+let test_default _ctxt =
   assert_roundtrip pp_default default_to_yojson default_of_yojson
                    { def = 42 } "{}"
 
 type bidi = int [@@deriving show, to_yojson, of_yojson]
-let test_bidi ctxt =
+let test_bidi _ctxt =
   assert_roundtrip pp_bidi bidi_to_yojson bidi_of_yojson
                    42 "42"
 
-let test_shortcut ctxt =
+let test_shortcut _ctxt =
   assert_roundtrip pp_i1 [%to_yojson: int] [%of_yojson: int]
                    42 "42"
 
@@ -265,7 +265,7 @@ type nostrict = {
   nostrict_field : int;
 }
 [@@deriving show, yojson { strict = false }]
-let test_nostrict ctxt =
+let test_nostrict _ctxt =
   assert_equal ~printer:(show_error_or pp_nostrict)
                (Result.Ok { nostrict_field = 42 })
                (nostrict_of_yojson (`Assoc ["nostrict_field", (`Int 42);
@@ -293,7 +293,7 @@ let rec pp_opentype f fmt = function
     Format.fprintf fmt ", %f)" v
 | _ -> assert false
 
-let test_opentype ctxt =
+let test_opentype _ctxt =
   let pp_ot = pp_opentype string_of_int in
   let to_yojson = Opentype.opentype_to_yojson i1_to_yojson in
   let of_yojson = Opentype.opentype_of_yojson i1_of_yojson in
@@ -373,7 +373,7 @@ type 'a recursive1 = { lhs : string ; rhs : 'a }
  and bar = int recursive1
                [@@deriving show, yojson]
 
-let test_recursive ctxt =
+let test_recursive _ctxt =
   assert_roundtrip (pp_recursive1 pp_i1)
                    (recursive1_to_yojson i1_to_yojson)
                    (recursive1_of_yojson i1_of_yojson)
