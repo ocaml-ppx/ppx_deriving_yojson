@@ -304,6 +304,23 @@ let test_opentype _ctxt =
   assert_roundtrip pp_ot to_yojson of_yojson
                    (C (Opentype.A 42, 1.2)) "[\"C\", [\"A\", 42], 1.2]"
 
+
+(* This will fail at type-check if we introduce features that increase
+   the default generated signatures. It is representative of user code
+   (there is plenty in OPAM) that uses our generated signatures, but
+   manually implement this restricted function set.
+
+   For example, the unconditional addition of of_yojson_exn has broken
+   this test. *)
+type outer_t = int [@@deriving yojson]
+module Automatic_deriving_in_signature_only
+  : sig type t [@@deriving yojson] end
+  = struct
+    type t = int
+    let of_yojson = outer_t_of_yojson
+    let to_yojson = outer_t_to_yojson
+  end
+
 module Warnings = struct
 
   module W34 = struct
