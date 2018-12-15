@@ -35,15 +35,24 @@ let attr_default attrs =
   Ppx_deriving.attr ~deriver "default" attrs |>
   Ppx_deriving.Arg.(get_attr ~deriver expr)
 
+type options = {
+  is_strict: bool;
+  want_meta: bool;
+}
+
 let parse_options options =
   let strict = ref true in
   let meta = ref false in
+  let get_bool = Ppx_deriving.Arg.(get_expr ~deriver bool) in
   options |> List.iter (fun (name, expr) ->
     match name with
-    | "strict" -> strict := Ppx_deriving.Arg.(get_expr ~deriver bool) expr
-    | "meta" -> meta := Ppx_deriving.Arg.(get_expr ~deriver bool) expr
+    | "strict" -> strict := get_bool expr
+    | "meta" -> meta := get_bool expr
     | _ -> raise_errorf ~loc:expr.pexp_loc "%s does not support option %s" deriver name);
-  (!strict, !meta)
+  {
+    is_strict = !strict;
+    want_meta = !meta;
+  }
 
 let rec ser_expr_of_typ typ =
   let attr_int_encoding typ =
@@ -459,7 +468,7 @@ let desu_str_of_record ~is_strict ~error ~path wrap_record labels =
 
 
 let desu_str_of_type ~options ~path ({ ptype_loc = loc } as type_decl) =
-  let (is_strict, _) = parse_options options in
+  let { is_strict; _ } = parse_options options in
   let path = path @ [type_decl.ptype_name.txt] in
   let error path = [%expr Result.Error [%e str (String.concat "." path)]] in
   let top_error = error path in
@@ -689,7 +698,7 @@ let desu_sig_of_type ~options ~path type_decl =
 let desu_sig_of_type_ext ~options:_ ~path:_ _type_ext = []
 
 let yojson_str_fields ~options ~path:_ type_decl =
-  let (_, want_meta) =  parse_options options in
+  let { want_meta; _ } = parse_options options in
   match want_meta, type_decl.ptype_kind with
   | false, _ | true, Ptype_open -> []
   | true, kind ->
@@ -712,7 +721,7 @@ let yojson_str_fields ~options ~path:_ type_decl =
     | _ -> []
 
 let yojson_sig_fields ~options ~path:_ type_decl =
-  let (_, want_meta) =  parse_options options in
+  let { want_meta; _ } = parse_options options in
   match want_meta, type_decl.ptype_kind with
   | false, _ | true, Ptype_open -> []
   | true, kind ->
