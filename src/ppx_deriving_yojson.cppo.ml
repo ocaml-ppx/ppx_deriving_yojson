@@ -35,15 +35,28 @@ let attr_default attrs =
   Ppx_deriving.attr ~deriver "default" attrs |>
   Ppx_deriving.Arg.(get_attr ~deriver expr)
 
+type options = {
+  is_strict: bool;
+  want_meta: bool;
+  want_exn: bool;
+}
+
 let parse_options options =
   let strict = ref true in
   let meta = ref false in
+  let exn = ref false in
+  let get_bool = Ppx_deriving.Arg.(get_expr ~deriver bool) in
   options |> List.iter (fun (name, expr) ->
     match name with
-    | "strict" -> strict := Ppx_deriving.Arg.(get_expr ~deriver bool) expr
-    | "meta" -> meta := Ppx_deriving.Arg.(get_expr ~deriver bool) expr
+    | "strict" -> strict := get_bool expr
+    | "meta" -> meta := get_bool expr
+    | "exn" -> exn := get_bool expr
     | _ -> raise_errorf ~loc:expr.pexp_loc "%s does not support option %s" deriver name);
-  (!strict, !meta)
+  {
+    is_strict = !strict;
+    want_meta = !meta;
+    want_exn = !exn;
+  }
 
 let rec ser_expr_of_typ typ =
   let attr_int_encoding typ =
@@ -459,7 +472,7 @@ let desu_str_of_record ~is_strict ~error ~path wrap_record labels =
 
 
 let desu_str_of_type ~options ~path ({ ptype_loc = loc } as type_decl) =
-  let (is_strict, _) = parse_options options in
+  let { is_strict; want_exn; _ } = parse_options options in
   let path = path @ [type_decl.ptype_name.txt] in
   let error path = [%expr Result.Error [%e str (String.concat "." path)]] in
   let top_error = error path in
@@ -563,10 +576,13 @@ let desu_str_of_type ~options ~path ({ ptype_loc = loc } as type_decl) =
      [Vb.mk ~attrs:[mkloc "ocaml.warning" !Ast_helper.default_loc, PStr [%str "-39"]]
             (Pat.constraint_ var poly_type)
             (polymorphize [%expr ([%e wrap_runtime desurializer])]) ],
-     [Str.value Nonrecursive [Vb.mk [%expr [%e pvar "_"]] [%expr [%e evar var_s]]]
-     ;Str.value Nonrecursive [Vb.mk [%expr [%e pvar var_s_exn]] var_s_exn_fun]
-     ;Str.value Nonrecursive [Vb.mk [%expr [%e pvar "_"]] [%expr [%e evar var_s_exn]]]
-     ])
+     [Str.value Nonrecursive [Vb.mk [%expr [%e pvar "_"]] [%expr [%e evar var_s]]]]
+     @
+     (if not want_exn then []
+      else
+        [Str.value Nonrecursive [Vb.mk [%expr [%e pvar var_s_exn]] var_s_exn_fun]
+        ;Str.value Nonrecursive [Vb.mk [%expr [%e pvar "_"]] [%expr [%e evar var_s_exn]]]])
+     )
 
 let desu_str_of_type_ext ~options ~path ({ ptyext_path = { loc } } as type_ext) =
   ignore(parse_options options);
@@ -649,6 +665,7 @@ let ser_sig_of_type ~options ~path type_decl =
 let ser_sig_of_type_ext ~options:_ ~path:_ _type_ext = []
 
 let desu_sig_of_type ~options ~path type_decl =
+  let { want_exn; _ } = parse_options options in
   let of_yojson =
     Sig.value (Val.mk (mknoloc (Ppx_deriving.mangle_type_decl (`Suffix "of_yojson") type_decl))
                       (desu_type_of_decl ~options ~path type_decl))
@@ -684,12 +701,14 @@ let desu_sig_of_type ~options ~path type_decl =
       ]))
     in
     [mod_; of_yojson]
-  | _ -> [of_yojson; of_yojson_exn]
+  | _ ->
+    [of_yojson]
+    @ (if not want_exn then [] else [of_yojson_exn])
 
 let desu_sig_of_type_ext ~options:_ ~path:_ _type_ext = []
 
 let yojson_str_fields ~options ~path:_ type_decl =
-  let (_, want_meta) =  parse_options options in
+  let { want_meta; _ } = parse_options options in
   match want_meta, type_decl.ptype_kind with
   | false, _ | true, Ptype_open -> []
   | true, kind ->
@@ -712,7 +731,7 @@ let yojson_str_fields ~options ~path:_ type_decl =
     | _ -> []
 
 let yojson_sig_fields ~options ~path:_ type_decl =
-  let (_, want_meta) =  parse_options options in
+  let { want_meta; _ } = parse_options options in
   match want_meta, type_decl.ptype_kind with
   | false, _ | true, Ptype_open -> []
   | true, kind ->
