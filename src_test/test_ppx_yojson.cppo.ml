@@ -372,6 +372,17 @@ module TestShadowing = struct
 
 end
 
+(* this test checks that we can derive an _exn deserializer
+   even if we use sub-types that are derived with {exn = false} *)
+module Test_exn_depends_on_non_exn = struct
+  module M : sig
+    type t [@@deriving yojson { exn = false }]
+  end = struct
+    type t = int [@@deriving yojson { exn = false }]
+  end
+  open M
+  type u = t * t [@@deriving yojson { exn = true }]
+end
 
 module Test_recursive_polyvariant = struct
   (* Regression test for
