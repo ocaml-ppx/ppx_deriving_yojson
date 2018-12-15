@@ -1,6 +1,15 @@
 Changelog
 =========
 
+3.3
+---
+
+  * Make `_exn` functions opt-in (`[@@deriving yojson { exn = true }]`)
+    to preserve backward-compatibility for fully-manual implementations
+    of the [@@deriving yojson] interface.
+    (#86)
+    Gabriel Scherer
+
 3.2
 ---
 
