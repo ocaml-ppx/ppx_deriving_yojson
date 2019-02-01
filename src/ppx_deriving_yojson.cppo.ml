@@ -84,7 +84,8 @@ let rec ser_expr_of_typ typ =
     [%expr fun x -> `List (Array.to_list (Array.map [%e ser_expr_of_typ typ] x))]
   | [%type: [%t? typ] option] ->
     [%expr function None -> `Null | Some x -> [%e ser_expr_of_typ typ] x]
-  | [%type: Yojson.Safe.json] -> [%expr fun x -> x]
+  | [%type: Yojson.Safe.json]
+  | [%type: Yojson.Safe.t] -> [%expr fun x -> x]
   | { ptyp_desc = Ptyp_constr ({ txt = lid }, args) } ->
     let fwd = app (Exp.ident (mknoloc (Ppx_deriving.mangle_lid (`Suffix "to_yojson") lid)))
         (List.map ser_expr_of_typ args)
@@ -120,7 +121,7 @@ let rec ser_expr_of_typ typ =
                        deriver (Ppx_deriving.string_of_core_type typ))
     in
     Exp.function_ cases
-  | { ptyp_desc = Ptyp_var name } -> [%expr ([%e evar ("poly_"^name)] : _ -> Yojson.Safe.json)]
+  | { ptyp_desc = Ptyp_var name } -> [%expr ([%e evar ("poly_"^name)] : _ -> Yojson.Safe.t)]
   | { ptyp_desc = Ptyp_alias (typ, name) } ->
     [%expr fun x -> [%e evar ("poly_"^name)] x; [%e ser_expr_of_typ typ] x]
   | { ptyp_loc } ->
@@ -185,6 +186,7 @@ and desu_expr_of_typ ~path typ =
   | [%type: [%t? typ] array] ->
     decode [%pat? `List xs]
            [%expr map_bind [%e desu_expr_of_typ ~path typ] [] xs >|= Array.of_list]
+  | [%type: Yojson.Safe.t]
   | [%type: Yojson.Safe.json] -> [%expr fun x -> Result.Ok x]
   | { ptyp_desc = Ptyp_tuple typs } ->
     decode [%pat? `List [%p plist (List.mapi (fun i _ -> pvar (argn i)) typs)]]
@@ -220,7 +222,7 @@ and desu_expr_of_typ ~path typ =
         | Result.Error _ -> [%e expr]]) error
       |> Exp.case [%pat? _]
     in
-    [%expr fun (json : Yojson.Safe.json) ->
+    [%expr fun (json : Yojson.Safe.t) ->
       [%e Exp.match_ [%expr json] (tag_cases @ [inherits_case])]]
   | { ptyp_desc = Ptyp_constr ({ txt = lid }, args) } ->
      let fwd = app (Exp.ident (mknoloc (Ppx_deriving.mangle_lid (`Suffix "of_yojson") lid)))
@@ -228,7 +230,7 @@ and desu_expr_of_typ ~path typ =
      (* eta-expansion is necessary for recursive groups *)
      [%expr fun x -> [%e fwd] x]
   | { ptyp_desc = Ptyp_var name } ->
-    [%expr ([%e evar ("poly_"^name)] : Yojson.Safe.json -> _ error_or)]
+    [%expr ([%e evar ("poly_"^name)] : Yojson.Safe.t -> _ error_or)]
   | { ptyp_desc = Ptyp_alias (typ, name) } ->
     [%expr fun x -> [%e evar ("poly_"^name)] x; [%e desu_expr_of_typ ~path typ] x]
   | { ptyp_loc } ->
@@ -242,8 +244,8 @@ let ser_type_of_decl ~options ~path:_ type_decl =
   ignore (parse_options options);
   let typ = Ppx_deriving.core_type_of_type_decl type_decl in
   let polymorphize = Ppx_deriving.poly_arrow_of_type_decl
-                       (fun var -> [%type: [%t var] -> Yojson.Safe.json]) type_decl in
-  polymorphize [%type: [%t typ] -> Yojson.Safe.json]
+                       (fun var -> [%type: [%t var] -> Yojson.Safe.t]) type_decl in
+  polymorphize [%type: [%t typ] -> Yojson.Safe.t]
 
 let ser_str_of_record varname labels =
   let fields =
@@ -282,7 +284,7 @@ let ser_str_of_type ~options ~path ({ ptype_loc = loc } as type_decl) =
       let orig_mod = Mod.ident (mknoloc lid) in
       ([Str.module_ (Mb.mk (mknoloc mod_name) orig_mod)],
        [Vb.mk (pvar to_yojson_name)
-              (polymorphize [%expr ([%e ser] : [%t typ] -> Yojson.Safe.json)])],
+              (polymorphize [%expr ([%e ser] : [%t typ] -> Yojson.Safe.t)])],
        [])
     | Some _ ->
       raise_errorf ~loc "%s: extensible type manifest should be a type name" deriver
@@ -291,9 +293,9 @@ let ser_str_of_type ~options ~path ({ ptype_loc = loc } as type_decl) =
           (Ppx_deriving.fold_left_type_decl (fun acc name -> name :: acc) [] type_decl)
       in
       let polymorphize_ser  = Ppx_deriving.poly_arrow_of_type_decl
-        (fun var -> [%type: [%t var] -> Yojson.Safe.json]) type_decl
+        (fun var -> [%type: [%t var] -> Yojson.Safe.t]) type_decl
       in
-      let ty = Typ.poly poly_vars (polymorphize_ser [%type: [%t typ] -> Yojson.Safe.json]) in
+      let ty = Typ.poly poly_vars (polymorphize_ser [%type: [%t typ] -> Yojson.Safe.t]) in
       let default_fun =
         let type_path = String.concat "." (path @ [type_decl.ptype_name.txt]) in
         let e_type_path = Exp.constant (Pconst_string (type_path, None)) in
@@ -424,12 +426,12 @@ let error_or typ = [%type: [%t typ] Ppx_deriving_yojson_runtime.error_or]
 let desu_type_of_decl_poly ~options ~path:_ type_decl type_ =
   ignore (parse_options options);
   let polymorphize = Ppx_deriving.poly_arrow_of_type_decl
-                       (fun var -> [%type: Yojson.Safe.json -> [%t error_or var]]) type_decl in
+                       (fun var -> [%type: Yojson.Safe.t -> [%t error_or var]]) type_decl in
   polymorphize type_
 
 let desu_type_of_decl ~options ~path type_decl =
   let typ = Ppx_deriving.core_type_of_type_decl type_decl in
-  desu_type_of_decl_poly ~options ~path type_decl [%type: Yojson.Safe.json -> [%t error_or typ]]
+  desu_type_of_decl_poly ~options ~path type_decl [%type: Yojson.Safe.t -> [%t error_or typ]]
 
 
 let desu_str_of_record ~is_strict ~error ~path wrap_record labels =
@@ -489,7 +491,7 @@ let desu_str_of_type ~options ~path ({ ptype_loc = loc } as type_decl) =
       let desu = desu_expr_of_typ ~path manifest in
       let lid = Ppx_deriving.mangle_lid (`PrefixSuffix ("M", "of_yojson")) lid in
       let orig_mod = Mod.ident (mknoloc lid) in
-      let poly_desu = polymorphize [%expr ([%e wrap_runtime desu] : Yojson.Safe.json -> _)] in
+      let poly_desu = polymorphize [%expr ([%e wrap_runtime desu] : Yojson.Safe.t -> _)] in
       ([Str.module_ (Mb.mk (mknoloc mod_name) orig_mod)],
        [Vb.mk (pvar of_yojson_name) poly_desu],
        [])
@@ -500,9 +502,9 @@ let desu_str_of_type ~options ~path ({ ptype_loc = loc } as type_decl) =
         (Ppx_deriving.fold_left_type_decl (fun acc name -> name :: acc) [] type_decl)
       in
       let polymorphize_desu = Ppx_deriving.poly_arrow_of_type_decl
-        (fun var -> [%type: Yojson.Safe.json -> [%t error_or var]]) type_decl in
+        (fun var -> [%type: Yojson.Safe.t -> [%t error_or var]]) type_decl in
       let ty = Typ.poly poly_vars
-        (polymorphize_desu [%type: Yojson.Safe.json -> [%t error_or typ]])
+        (polymorphize_desu [%type: Yojson.Safe.t -> [%t error_or typ]])
       in
       let default_fun = Exp.function_ [Exp.case [%pat? _] top_error] in
       let poly_fun = polymorphize default_fun in
@@ -644,9 +646,9 @@ let ser_sig_of_type ~options ~path type_decl =
     in
     let typ = Ppx_deriving.core_type_of_type_decl type_decl in
     let polymorphize_ser  = Ppx_deriving.poly_arrow_of_type_decl
-      (fun var -> [%type: [%t var] -> Yojson.Safe.json]) type_decl
+      (fun var -> [%type: [%t var] -> Yojson.Safe.t]) type_decl
     in
-    let ty = Typ.poly poly_vars (polymorphize_ser [%type: [%t typ] -> Yojson.Safe.json]) in
+    let ty = Typ.poly poly_vars (polymorphize_ser [%type: [%t typ] -> Yojson.Safe.t]) in
     let typ = Type.mk ~kind:(Ptype_record
        [Type.field ~mut:Mutable (mknoloc "f") ty]) (mknoloc "t_to_yojson")
     in
@@ -673,7 +675,7 @@ let desu_sig_of_type ~options ~path type_decl =
   let typ = Ppx_deriving.core_type_of_type_decl type_decl in
   let of_yojson_exn =
     Sig.value (Val.mk (mknoloc (Ppx_deriving.mangle_type_decl (`Suffix "of_yojson_exn") type_decl))
-                      (desu_type_of_decl_poly ~options ~path type_decl [%type: Yojson.Safe.json -> [%t typ]]))
+                      (desu_type_of_decl_poly ~options ~path type_decl [%type: Yojson.Safe.t -> [%t typ]]))
   in
   match type_decl.ptype_kind with
   | Ptype_open ->
@@ -685,9 +687,9 @@ let desu_sig_of_type ~options ~path type_decl =
     in
     let typ = Ppx_deriving.core_type_of_type_decl type_decl in
     let polymorphize_desu = Ppx_deriving.poly_arrow_of_type_decl
-      (fun var -> [%type: Yojson.Safe.json -> [%t error_or var]]) type_decl in
+      (fun var -> [%type: Yojson.Safe.t -> [%t error_or var]]) type_decl in
     let ty = Typ.poly poly_vars
-      (polymorphize_desu [%type: Yojson.Safe.json -> [%t error_or typ]])
+      (polymorphize_desu [%type: Yojson.Safe.t -> [%t error_or typ]])
     in
     let typ = Type.mk ~kind:(Ptype_record
        [Type.field ~mut:Mutable (mknoloc "f") ty]) (mknoloc "t_of_yojson")

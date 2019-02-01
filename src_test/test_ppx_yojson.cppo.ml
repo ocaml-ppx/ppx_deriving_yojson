@@ -217,7 +217,7 @@ let test_field_err _ctxt =
                (Result.Error "Test_ppx_yojson.geo.lat")
                (geo_of_yojson (`Assoc ["Longitude", (`Float 42.0)]))
 
-type id = Yojson.Safe.json [@@deriving yojson]
+type id = Yojson.Safe.t [@@deriving yojson]
 let test_id _ctxt =
   assert_roundtrip pp_json id_to_yojson id_of_yojson
                    (`Int 42) "42"
