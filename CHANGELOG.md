@@ -1,6 +1,13 @@
 Changelog
 =========
 
+3.4
+---
+
+  * compatibility with yojson 1.6.0
+    (#90, #92)
+    Vadim Radovel and Nathan Rebours
+
 3.3
 ---
 
