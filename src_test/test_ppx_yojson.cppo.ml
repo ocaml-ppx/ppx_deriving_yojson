@@ -143,7 +143,15 @@ let test_list _ctxt =
   assert_roundtrip pp_xl xl_to_yojson xl_of_yojson
                    [] "[]";
   assert_roundtrip pp_xl xl_to_yojson xl_of_yojson
-                   [42; 43] "[42, 43]"
+                   [42; 43] "[42, 43]";
+  let lst = List.init 500000 (fun i -> i mod 100) in
+  let buf = Buffer.create (5000 * 390 + 4) in
+  Buffer.add_string buf "[";
+  Buffer.add_string buf (string_of_int (List.hd lst));
+  List.iter (fun x -> Buffer.add_string buf ", "; Buffer.add_string buf (string_of_int x)) (List.tl lst);
+  Buffer.add_string buf "]";
+  let str = Bytes.to_string (Buffer.to_bytes buf) in
+  assert_roundtrip pp_xl xl_to_yojson xl_of_yojson lst str
 
 let test_array _ctxt =
   assert_roundtrip pp_xa xa_to_yojson xa_of_yojson
