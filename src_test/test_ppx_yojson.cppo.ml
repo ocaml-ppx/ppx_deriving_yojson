@@ -144,8 +144,12 @@ let test_list _ctxt =
                    [] "[]";
   assert_roundtrip pp_xl xl_to_yojson xl_of_yojson
                    [42; 43] "[42, 43]";
-  let lst = List.init 500000 (fun i -> i mod 100) in
-  let buf = Buffer.create (5000 * 390 + 4) in
+  let rec make_list i acc =
+            if i = 0
+            then (i mod 100 :: acc)
+            else make_list (i - 1) (i mod 100 :: acc) in
+  let lst =  make_list (500_000 - 1) [] in
+  let buf = Buffer.create (5_000 * 390 + 4) in
   Buffer.add_string buf "[";
   Buffer.add_string buf (string_of_int (List.hd lst));
   List.iter (fun x -> Buffer.add_string buf ", "; Buffer.add_string buf (string_of_int x)) (List.tl lst);
