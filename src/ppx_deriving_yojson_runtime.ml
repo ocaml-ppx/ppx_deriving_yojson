@@ -12,3 +12,8 @@ let rec map_bind f acc xs =
   | [] -> Result.Ok (List.rev acc)
 
 type 'a error_or = ('a, string) Result.result
+
+(** [safe_map f l] returns the same value as [List.map f l], but
+    computes it tail-recursively so that large list lengths don't
+    cause a stack overflow *)
+let safe_map f l = List.rev (List.rev_map f l)

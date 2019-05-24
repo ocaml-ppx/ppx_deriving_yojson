@@ -71,7 +71,7 @@ let rec ser_expr_of_typ typ =
   | [%type: bytes]           -> [%expr fun x -> `String (Bytes.to_string x)]
   | [%type: char]            -> [%expr fun x -> `String (String.make 1 x)]
   | [%type: [%t? typ] ref]   -> [%expr fun x -> [%e ser_expr_of_typ typ] !x]
-  | [%type: [%t? typ] list]  -> [%expr fun x -> `List (List.map [%e ser_expr_of_typ typ] x)]
+  | [%type: [%t? typ] list]  -> [%expr fun x -> `List (safe_map [%e ser_expr_of_typ typ] x)]
   | [%type: int32] | [%type: Int32.t] ->
     [%expr fun x -> `Intlit (Int32.to_string x)]
   | [%type: int64] | [%type: Int64.t] ->
