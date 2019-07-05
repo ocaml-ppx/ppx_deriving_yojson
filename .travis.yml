@@ -8,6 +8,7 @@ env:
   global:
   - PINS="ppx_deriving_yojson:."
   matrix:
+  - PACKAGE="ppx_deriving_yojson" DISTRO="ubuntu-16.04"    OCAML_VERSION="4.08"
   - PACKAGE="ppx_deriving_yojson" DISTRO="ubuntu-16.04"    OCAML_VERSION="4.07"
   - PACKAGE="ppx_deriving_yojson" DISTRO="ubuntu-16.04"    OCAML_VERSION="4.06"
   - PACKAGE="ppx_deriving_yojson" DISTRO="ubuntu-16.04"    OCAML_VERSION="4.05"
