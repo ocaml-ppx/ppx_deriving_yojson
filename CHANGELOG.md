@@ -1,6 +1,16 @@
 Changelog
 =========
 
+3.5
+---
+
+  * use tail-recursive functions to (de)serialize long lists
+    (#97)
+    Alex Knauth
+  * Support for OCaml 4.08
+    (#99)
+    Antonio Nuno Monteiro
+
 3.4
 ---
 
