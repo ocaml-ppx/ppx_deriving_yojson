@@ -865,7 +865,7 @@ let () =
    ));
   Ppx_deriving.(register
    (create "to_yojson"
-    ~core_type:ser_expr_of_typ
+    ~core_type:(fun typ -> wrap_runtime (ser_expr_of_typ typ))
     ~type_decl_str:(structure (on_str_decls str_of_type_to_yojson))
     ~type_ext_str:ser_str_of_type_ext
     ~type_decl_sig:(on_sig_decls sig_of_type_to_yojson)
