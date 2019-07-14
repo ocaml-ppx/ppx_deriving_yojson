@@ -1,6 +1,14 @@
 Changelog
 =========
 
+3.5.1
+-----
+
+  * Two bugfixes when using [%to_json ], [%of_json ] extensions
+    (error with polymorphic variables, unbound value 'safe_map')
+    (#100, #101)
+    Gabriel Scherer, report by Matt Windsor
+
 3.5
 ---
 
