@@ -70,6 +70,15 @@ let parse_options options =
     want_exn = !exn;
   }
 
+let poly_fun names expr =
+  List.fold_right (fun name expr ->
+      #if OCAML_VERSION >= (4, 05, 0)
+      let name = name.Location.txt in
+      #endif
+      [%expr fun [%p pvar ("poly_"^name)] -> [%e expr]]
+    ) names expr
+
+
 let rec ser_expr_of_typ typ =
   let attr_int_encoding typ =
     match attr_int_encoding typ with `String -> "String" | `Int -> "Intlit"
@@ -149,6 +158,8 @@ let rec ser_expr_of_typ typ =
   | { ptyp_desc = Ptyp_var name } -> [%expr ([%e evar ("poly_"^name)] : _ -> Yojson.Safe.t)]
   | { ptyp_desc = Ptyp_alias (typ, name) } ->
     [%expr fun x -> [%e evar ("poly_"^name)] x; [%e ser_expr_of_typ typ] x]
+  | { ptyp_desc = Ptyp_poly (names, typ) } ->
+     poly_fun names (ser_expr_of_typ typ)
   | { ptyp_loc } ->
     raise_errorf ~loc:ptyp_loc "%s cannot be derived for %s"
                  deriver (Ppx_deriving.string_of_core_type typ)
@@ -286,6 +297,8 @@ and desu_expr_of_typ ~path typ =
     [%expr ([%e evar ("poly_"^name)] : Yojson.Safe.t -> _ error_or)]
   | { ptyp_desc = Ptyp_alias (typ, name) } ->
     [%expr fun x -> [%e evar ("poly_"^name)] x; [%e desu_expr_of_typ ~path typ] x]
+  | { ptyp_desc = Ptyp_poly (names, typ) } ->
+     poly_fun names (desu_expr_of_typ ~path typ)
   | { ptyp_loc } ->
     raise_errorf ~loc:ptyp_loc "%s cannot be derived for %s"
                  deriver (Ppx_deriving.string_of_core_type typ)
@@ -865,7 +878,9 @@ let () =
    ));
   Ppx_deriving.(register
    (create "to_yojson"
-    ~core_type:ser_expr_of_typ
+    ~core_type:(fun typ ->
+      let typ = Ppx_deriving.strong_type_of_type typ in
+      wrap_runtime (ser_expr_of_typ typ))
     ~type_decl_str:(structure (on_str_decls str_of_type_to_yojson))
     ~type_ext_str:ser_str_of_type_ext
     ~type_decl_sig:(on_sig_decls sig_of_type_to_yojson)
@@ -874,7 +889,9 @@ let () =
   ));
   Ppx_deriving.(register
    (create "of_yojson"
-    ~core_type:(fun typ -> wrap_runtime (desu_expr_of_typ ~path:[] typ))
+    ~core_type:(fun typ ->
+      let typ = Ppx_deriving.strong_type_of_type typ in
+      wrap_runtime (desu_expr_of_typ ~path:[] typ))
     ~type_decl_str:(structure (on_str_decls str_of_type_of_yojson))
     ~type_ext_str:desu_str_of_type_ext
     ~type_decl_sig:(on_sig_decls sig_of_type_of_yojson)

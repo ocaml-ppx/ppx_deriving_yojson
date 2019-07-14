@@ -139,6 +139,12 @@ let test_option _ctxt =
   assert_roundtrip pp_xo xo_to_yojson xo_of_yojson
                    None "null"
 
+let test_poly _ctxt =
+  assert_roundtrip pp_xo
+    (([%to_yojson: 'a option] [%to_yojson: int]))
+    (([%of_yojson: 'a option] [%of_yojson: int]))
+                   (Some 42) "42"
+
 let test_list _ctxt =
   assert_roundtrip pp_xl xl_to_yojson xl_of_yojson
                    [] "[]";
@@ -384,6 +390,39 @@ module TestShadowing = struct
 
 end
 
+module Test_extension_forms = struct
+  let _ = [%to_yojson: unit], [%of_yojson: unit]
+  let _ = [%to_yojson: int], [%of_yojson: int]
+  let _ = [%to_yojson: int32], [%of_yojson: int32]
+  let _ = [%to_yojson: Int32.t], [%of_yojson: Int32.t]
+  let _ = [%to_yojson: int64], [%of_yojson: int64]
+  let _ = [%to_yojson: Int64.t], [%of_yojson: Int64.t]
+  let _ = [%to_yojson: nativeint], [%of_yojson: nativeint]
+  let _ = [%to_yojson: Nativeint.t], [%of_yojson: Nativeint.t]
+  let _ = [%to_yojson: int64], [%of_yojson: int64]
+  let _ = [%to_yojson: nativeint], [%of_yojson: nativeint]
+  let _ = [%to_yojson: float], [%of_yojson: float]
+  let _ = [%to_yojson: bool], [%of_yojson: bool]
+  let _ = [%to_yojson: char], [%of_yojson: char]
+  let _ = [%to_yojson: string], [%of_yojson: string]
+  let _ = [%to_yojson: bytes], [%of_yojson: bytes]
+  let _ = [%to_yojson: int], [%of_yojson: int]
+  let _ = [%to_yojson: int ref], [%of_yojson: int ref]
+  let _ = [%to_yojson: int option], [%of_yojson: int option]
+  let _ = [%to_yojson: int list], [%of_yojson: int list]
+  let _ = [%to_yojson: int array], [%of_yojson: int array]
+  let _ = [%to_yojson: int * int], [%of_yojson: int * int]
+
+  let _ =  [%to_yojson: 'a option],
+          [%of_yojson: 'a option]
+  let _ = [%to_yojson: [ `A | `B of int | `C of int * string ]],
+          [%of_yojson: [ `A | `B of int | `C of int * string ]]
+  let _ = [%to_yojson: [ `C of 'a ]],
+          [%of_yojson: [ `C of 'a ]]
+  let _ = [%to_yojson: [ pva | pvb | int pvc ]],
+          [%of_yojson: [ pva | pvb | int pvc ]]
+end
+
 (* this test checks that we can derive an _exn deserializer
    even if we use sub-types that are derived with {exn = false} *)
 module Test_exn_depends_on_non_exn = struct
@@ -445,6 +484,7 @@ let suite = "Test ppx_yojson" >::: [
     "test_string"    >:: test_string;
     "test_ref"       >:: test_ref;
     "test_option"    >:: test_option;
+    "test_poly"      >:: test_poly;
     "test_list"      >:: test_list;
     "test_array"     >:: test_array;
     "test_tuple"     >:: test_tuple;
