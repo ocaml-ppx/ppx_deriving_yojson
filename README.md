@@ -35,13 +35,12 @@ If you are using dune, add `ppx_deriving_json` to the `preprocess` entry, and `p
 Syntax
 ------
 
-_deriving yojson_ generates three functions per type:
+_deriving yojson_ generates two functions per type:
 
 ``` ocaml
 # #require "ppx_deriving_yojson";;
 # type ty = .. [@@deriving yojson];;
 val ty_of_yojson : Yojson.Safe.t -> (ty, string) Result.result
-val ty_of_yojson_exn : Yojson.Safe.t -> ty
 val ty_to_yojson : ty -> Yojson.Safe.t
 ```
 
@@ -51,7 +50,7 @@ It is possible to generate only serializing or deserializing functions by using 
 
 If the type is called `t`, the functions generated are `{of,to}_yojson` instead of `t_{of,to}_yojson`.
 
-The `ty_of_yojson_exn` function raises `Failure err` on error instead of returning an `'a or_error`
+Using the option `[@@deriving yojson { exn = true }]` will also generate a function `ty_of_yojson_exn : Yojson.Safe.t -> ty` which raises `Failure err` on error instead of returning an `'a or_error`.
 
 Semantics
 ---------
