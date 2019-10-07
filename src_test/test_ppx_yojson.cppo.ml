@@ -279,6 +279,41 @@ let test_shortcut _ctxt =
   assert_roundtrip pp_i1 [%to_yojson: int] [%of_yojson: int]
                    42 "42"
 
+module CustomConversions = struct
+
+  module IntMap = Map.Make(struct type t = int let compare = compare end)
+  type mapEncoding = (int * string) list [@@deriving yojson]
+  let map_to_yojson m = mapEncoding_to_yojson @@ IntMap.bindings m 
+  let map_of_yojson json = 
+    Result.(match mapEncoding_of_yojson json with
+              | Ok lst -> Ok (List.fold_left (fun m (k, v) -> IntMap.add k v m) IntMap.empty lst)
+              | Error s -> Error s)
+
+  type k = string IntMap.t [@to_yojson map_to_yojson]
+                           [@of_yojson map_of_yojson]
+                           [@printer fun fmt a -> ()]
+                           [@@deriving show, yojson]
+  let test_bare _ctxt =
+    assert_roundtrip pp_k k_to_yojson k_of_yojson
+                     IntMap.(add 6 "foo" @@ empty)
+                     {|[[6,"foo"]]|}
+
+  type crecord = {
+    mapping : string IntMap.t [@to_yojson map_to_yojson]
+                              [@of_yojson map_of_yojson]
+                              [@printer fun fmt a -> ()]
+  } [@@deriving yojson, show]
+
+  let test_record _ctxt =
+    assert_roundtrip pp_crecord crecord_to_yojson crecord_of_yojson
+                     IntMap.{ mapping = add 6 "foo" @@ empty }
+                     {|{"mapping":[[6,"foo"]]}|}
+  
+  let suite = "Custom conversion attributes" >:::
+    [ "test_record"      >:: test_record
+    ; "test_bare"        >:: test_bare ]
+end
+
 type nostrict = {
   nostrict_field : int;
 }
@@ -502,6 +537,7 @@ let suite = "Test ppx_yojson" >::: [
     "test_field_err" >:: test_field_err;
     "test_default"   >:: test_default;
     "test_bidi"      >:: test_bidi;
+    "test_custom"    >:  CustomConversions.suite;
     "test_shortcut"  >:: test_shortcut;
     "test_nostrict"  >:: test_nostrict;
     "test_opentype"  >:: test_opentype;

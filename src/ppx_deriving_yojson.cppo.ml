@@ -42,6 +42,10 @@ let attr_string name default attrs =
 
 let attr_key  = attr_string "key"
 let attr_name = attr_string "name"
+let attr_ser attrs =
+  Ppx_deriving.(attrs |> attr ~deriver "to_yojson" |> Arg.(get_attr ~deriver expr))
+let attr_desu attrs =
+  Ppx_deriving.(attrs |> attr ~deriver "of_yojson" |> Arg.(get_attr ~deriver expr))
 
 let attr_default attrs =
   Ppx_deriving.attr ~deriver "default" attrs |>
@@ -78,8 +82,14 @@ let poly_fun names expr =
       [%expr fun [%p pvar ("poly_"^name)] -> [%e expr]]
     ) names expr
 
+let type_add_attrs typ attributes = 
+  { typ with ptyp_attributes = typ.ptyp_attributes @ attributes }
 
 let rec ser_expr_of_typ typ =
+  match attr_ser typ.ptyp_attributes with
+    | Some e -> e
+    | None -> ser_expr_of_only_typ typ
+and ser_expr_of_only_typ typ =
   let attr_int_encoding typ =
     match attr_int_encoding typ with `String -> "String" | `Int -> "Intlit"
   in
@@ -172,6 +182,10 @@ let rec desu_fold ~path f typs =
     [%expr [%e y] >>= fun [%p pvar (argn i)] -> [%e x]])
     [%expr Result.Ok [%e f (List.mapi (fun i _ -> evar (argn i)) typs)]]
 and desu_expr_of_typ ~path typ =
+  match attr_desu typ.ptyp_attributes with
+    | Some e -> e
+    | None -> desu_expr_of_only_typ ~path typ
+and desu_expr_of_only_typ ~path typ =
   let error = [%expr Result.Error [%e str (String.concat "." path)]] in
   let decode' cases =
     Exp.function_ (
@@ -318,7 +332,7 @@ let ser_str_of_record varname labels =
     labels |> List.mapi (fun _i { pld_name = { txt = name }; pld_type; pld_attributes } ->
       let field  = Exp.field (evar varname) (mknoloc (Lident name)) in
       let result = [%expr [%e str (attr_key name pld_attributes)],
-                    [%e ser_expr_of_typ pld_type] [%e field]] in
+                    [%e ser_expr_of_typ @@ type_add_attrs pld_type pld_attributes] [%e field]] in
       match attr_default (pld_type.ptyp_attributes @ pld_attributes) with
       | None ->
           [%expr [%e result] :: fields]
@@ -520,7 +534,9 @@ let desu_str_of_record ~is_strict ~error ~path wrap_record labels =
     (labels |> List.mapi (fun i { pld_name = { txt = name }; pld_type; pld_attributes } ->
         let path = path @ [name] in
         let thunks = labels |> List.mapi (fun j _ ->
-             if i = j then app (desu_expr_of_typ ~path pld_type) [evar "x"] else evar (argn j)) in
+             if i = j
+             then app (desu_expr_of_typ ~path @@ type_add_attrs pld_type pld_attributes) [evar "x"]
+             else evar (argn j)) in
         Exp.case [%pat? ([%p pstr (attr_key name pld_attributes)], x) :: xs]
           [%expr loop xs [%e tuple thunks]])) @
     [Exp.case [%pat? []] record;
