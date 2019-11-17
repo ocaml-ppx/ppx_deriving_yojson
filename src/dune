@@ -10,8 +10,7 @@
  (public_name ppx_deriving_yojson)
  (synopsis "[@@deriving yojson]")
  (libraries ppx_deriving.api)
- (preprocess
-  (action (run ppxfind -legacy ppx_tools.metaquot --as-pp %{input-file})))
+ (preprocess (pps ppxlib.metaquot))
  (ppx_runtime_libraries ppx_deriving_yojson_runtime yojson)
  (modules ppx_deriving_yojson)
  (kind ppx_deriver)
