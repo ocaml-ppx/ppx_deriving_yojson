@@ -1,26 +1,26 @@
-#if OCAML_VERSION >= (4, 08, 0)
-#define Rtag(label, attrs, has_empty, args) \
-        Rtag({ txt = label }, has_empty, args)
-#elif OCAML_VERSION >= (4, 06, 0)
-#define Rtag(label, attrs, has_empty, args) \
-        Rtag({ txt = label }, attrs, has_empty, args)
-#endif
-
-#if OCAML_VERSION >= (4, 08, 0)
-#define Attribute_expr(loc_, txt_, payload) { attr_name = \
-                                                { txt = txt_; loc = loc_ }; \
-                                              attr_payload = payload; \
-                                              attr_loc = loc_ }
-#else
-#define Attribute_expr(loc_, txt_, payload) ({txt = txt_; loc = loc_}, payload)
-#endif
-
-open Longident
-open Location
-open Asttypes
-open Parsetree
+open Ppxlib
 open Ast_helper
-open Ast_convenience
+
+module Ast_builder_default_loc = struct
+  include Ppx_deriving.Ast_convenience
+
+  let gen_def_loc f x =
+    let loc = !Ast_helper.default_loc in
+    f ~loc x
+
+  let lid = gen_def_loc Ast_builder.Default.Located.lident
+  let list = gen_def_loc Ast_builder.Default.elist
+  let pstr = gen_def_loc Ast_builder.Default.pstring
+  let plist = gen_def_loc Ast_builder.Default.plist
+  let lam = gen_def_loc Ast_builder.Default.pexp_fun Nolabel None
+end
+
+open Ast_builder_default_loc
+
+let warning_39 () =
+  let loc = !Ast_helper.default_loc in
+  let name = { txt = "ocaml.warning"; loc } in
+  Ast_helper.Attr.mk ~loc name (PStr [%str "-39"])
 
 
 #if OCAML_VERSION >= (4, 10, 0)
@@ -83,9 +83,7 @@ let parse_options options =
 
 let poly_fun names expr =
   List.fold_right (fun name expr ->
-      #if OCAML_VERSION >= (4, 05, 0)
       let name = name.Location.txt in
-      #endif
       [%expr fun [%p pvar ("poly_"^name)] -> [%e expr]]
     ) names expr
 
@@ -138,29 +136,22 @@ and ser_expr_of_only_typ typ =
   | { ptyp_desc = Ptyp_variant (fields, _, _); ptyp_loc } ->
     let cases =
       fields |> List.map (fun (field: row_field) ->
-#if OCAML_VERSION >= (4, 08, 0)
         match field.prf_desc with
-#else
-        match field with
-#endif
-        | Rtag(label, attrs, true (*empty*), []) ->
-#if OCAML_VERSION >= (4, 08, 0)
+        | Rtag(label, true (*empty*), []) ->
+          let label = label.txt in
           let attrs = field.prf_attributes in
-#endif
           Exp.case (Pat.variant label None)
                    [%expr `List [`String [%e str (attr_name label attrs)]]]
-        | Rtag(label, attrs, false, [{ ptyp_desc = Ptyp_tuple typs }]) ->
-#if OCAML_VERSION >= (4, 08, 0)
+        | Rtag(label, false, [{ ptyp_desc = Ptyp_tuple typs }]) ->
+          let label = label.txt in
           let attrs = field.prf_attributes in
-#endif
           Exp.case (Pat.variant label (Some (ptuple (List.mapi (fun i _ -> pvar (argn i)) typs))))
                    [%expr `List ((`String [%e str (attr_name label attrs)]) :: [%e
                       list (List.mapi
                         (fun i typ -> app (ser_expr_of_typ typ) [evar (argn i)]) typs)])]
-        | Rtag(label, attrs, false, [typ]) ->
-#if OCAML_VERSION >= (4, 08, 0)
+        | Rtag(label, false, [typ]) ->
+          let label = label.txt in
           let attrs = field.prf_attributes in
-#endif
           Exp.case (Pat.variant label (Some [%pat? x]))
                    [%expr `List [`String [%e str (attr_name label attrs)];
                                  [%e ser_expr_of_typ typ] x]]
@@ -250,37 +241,26 @@ and desu_expr_of_only_typ ~path typ =
            (desu_fold ~path tuple typs)
   | { ptyp_desc = Ptyp_variant (fields, _, _); ptyp_loc } ->
     let inherits, tags = List.partition (fun field ->
-#if OCAML_VERSION >= (4, 08, 0)
       match field.prf_desc with
-#else
-      match field with
-#endif
       Rinherit _ -> true
       | _ -> false) fields
     in
     let tag_cases = tags |> List.map (fun field ->
-#if OCAML_VERSION >= (4, 08, 0)
       match field.prf_desc with
-#else
-      match field with
-#endif
-      | Rtag(label, attrs, true (*empty*), []) ->
-#if OCAML_VERSION >= (4, 08, 0)
+      | Rtag(label, true (*empty*), []) ->
+        let label = label.txt in
         let attrs = field.prf_attributes in
-#endif
         Exp.case [%pat? `List [`String [%p pstr (attr_name label attrs)]]]
                  [%expr Result.Ok [%e Exp.variant label None]]
-      | Rtag(label, attrs, false, [{ ptyp_desc = Ptyp_tuple typs }]) ->
-#if OCAML_VERSION >= (4, 08, 0)
+      | Rtag(label, false, [{ ptyp_desc = Ptyp_tuple typs }]) ->
+        let label = label.txt in
         let attrs = field.prf_attributes in
-#endif
         Exp.case [%pat? `List ((`String [%p pstr (attr_name label attrs)]) :: [%p
                     plist (List.mapi (fun i _ -> pvar (argn i)) typs)])]
                  (desu_fold ~path (fun x -> (Exp.variant label (Some (tuple x)))) typs)
-      | Rtag(label, attrs, false, [typ]) ->
-#if OCAML_VERSION >= (4, 08, 0)
+      | Rtag(label, false, [typ]) ->
+        let label = label.txt in
         let attrs = field.prf_attributes in
-#endif
         Exp.case [%pat? `List [`String [%p pstr (attr_name label attrs)]; x]]
                  [%expr [%e desu_expr_of_typ ~path typ] x >>= fun x ->
                         Result.Ok [%e Exp.variant label (Some [%expr x])]]
@@ -294,11 +274,7 @@ and desu_expr_of_only_typ ~path typ =
       let toplevel_typ = typ in
       inherits
       |> List.map (fun field ->
-#if OCAML_VERSION >= (4, 08, 0)
         match field.prf_desc with
-#else
-        match field with
-#endif
         | Rinherit typ -> typ
         | _ -> assert false)
       |> List.fold_left (fun expr typ -> [%expr
@@ -452,7 +428,7 @@ let ser_str_of_type ~options ~path ({ ptype_loc = loc } as type_decl) =
     let var = pvar var_s in
     ([],
      [Vb.mk
-        ~attrs:[Attribute_expr(!Ast_helper.default_loc, "ocaml.warning", PStr [%str "-39"])]
+        ~attrs:[warning_39 ()]
         (Pat.constraint_ var poly_type)
         (polymorphize [%expr ([%e wrap_runtime serializer])])],
      [Str.value Nonrecursive [Vb.mk [%expr [%e pvar "_"]] [%expr [%e evar var_s]]] ]
@@ -499,7 +475,7 @@ let ser_str_of_type_ext ~options ~path:_ ({ ptyext_path = { loc }} as type_ext) 
       Ppx_deriving.mangle_lid
         (`PrefixSuffix ("M", "to_yojson")) type_ext.ptyext_path.txt
     in
-    String.concat "." (Longident.flatten mod_lid)
+    String.concat "." (Longident.flatten_exn mod_lid)
   in
   let polymorphize = Ppx_deriving.poly_fun_of_type_ext type_ext in
   let serializer = polymorphize (wrap_runtime serializer) in
@@ -665,7 +641,7 @@ let desu_str_of_type ~options ~path ({ ptype_loc = loc } as type_decl) =
       loop ((List.mapi (fun i _ -> argn i) ptype_params) @ ["x"])
     in
     ([],
-     [Vb.mk ~attrs:[Attribute_expr(!Ast_helper.default_loc, "ocaml.warning", PStr [%str "-39"])]
+     [Vb.mk ~attrs:[warning_39 ()]
             (Pat.constraint_ var poly_type)
             (polymorphize [%expr ([%e wrap_runtime desurializer])]) ],
      [Str.value Nonrecursive [Vb.mk [%expr [%e pvar "_"]] [%expr [%e evar var_s]]]]
@@ -711,7 +687,7 @@ let desu_str_of_type_ext ~options ~path ({ ptyext_path = { loc } } as type_ext) 
       Ppx_deriving.mangle_lid
         (`PrefixSuffix ("M", "of_yojson")) type_ext.ptyext_path.txt
     in
-    String.concat "." (Longident.flatten mod_lid)
+    String.concat "." (Longident.flatten_exn mod_lid)
   in
   let polymorphize = Ppx_deriving.poly_fun_of_type_ext type_ext in
   let desurializer = wrap_runtime (polymorphize desurializer) in
