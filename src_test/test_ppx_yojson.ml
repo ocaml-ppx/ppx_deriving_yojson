@@ -65,10 +65,8 @@ type v  = A | B of int | C of int * string
 [@@deriving show, yojson]
 type r  = { x : int; y : string }
 [@@deriving show, yojson]
-#if OCAML_VERSION >= (4, 03, 0)
 type rv = RA | RB of int | RC of int * string | RD of { z : string }
 [@@deriving show, yojson]
-#endif
 
 let test_unit _ctxt =
   assert_roundtrip pp_u u_to_yojson u_of_yojson
