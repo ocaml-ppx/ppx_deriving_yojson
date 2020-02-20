@@ -1,6 +1,17 @@
 Changelog
 =========
 
+3.5.2
+-----
+
+  * [@to_yojson], [@from_yojson] to override serialization functions
+    for certain record fields
+    (#107, #108)
+    Chas Emerick
+  * Support for OCaml 4.10
+    (#112)
+    Kate Deplaix
+
 3.5.1
 -----
 
