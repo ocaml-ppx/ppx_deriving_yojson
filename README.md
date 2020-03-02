@@ -176,7 +176,7 @@ type foo = {
  fvalue : float;
  svalue : string [@key "@svalue_json"];
  ivalue : int;
-} [@@deriving to_yojson { strict = false, fields = true } ]
+} [@@deriving to_yojson { strict = false, meta = true } ]
 end
 ```
 
