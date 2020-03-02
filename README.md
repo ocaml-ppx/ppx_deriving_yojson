@@ -9,7 +9,7 @@ Sponsored by [Evil Martians](http://evilmartians.com).
 
 [pd]: https://github.com/ocaml-ppx/ppx_deriving
 [json]: http://tools.ietf.org/html/rfc4627
-[yojson]: http://mjambon.com/yojson.html
+[yojson]: https://github.com/ocaml-community/yojson
 
 Installation
 ------------
@@ -44,13 +44,13 @@ val ty_of_yojson : Yojson.Safe.t -> (ty, string) Result.result
 val ty_to_yojson : ty -> Yojson.Safe.t
 ```
 
-When the deserializing function returns <code>\`Error loc</code>, `loc` points to the point in the JSON hierarchy where the error has occurred.
+When the deserializing function returns <code>Error loc</code>, `loc` points to the point in the JSON hierarchy where the error has occurred.
 
 It is possible to generate only serializing or deserializing functions by using `[@@deriving to_yojson]` or `[@@deriving of_yojson]`. It is also possible to generate an expression for serializing or deserializing a type by using `[%to_yojson:]` or `[%of_yojson:]`; non-conflicting versions `[%derive.to_yojson:]` or `[%derive.of_yojson:]` are available as well. Custom or overriding serializing or deserializing functions can be provided on a per-field basis via `[@to_yojson]` and `[@of_yojson]` attributes.
 
 If the type is called `t`, the functions generated are `{of,to}_yojson` instead of `t_{of,to}_yojson`.
 
-Using the option `[@@deriving yojson { exn = true }]` will also generate a function `ty_of_yojson_exn : Yojson.Safe.t -> ty` which raises `Failure err` on error instead of returning an `'a or_error`.
+Using the option `[@@deriving yojson { exn = true }]` will also generate a function `ty_of_yojson_exn : Yojson.Safe.t -> ty` which raises `Failure err` on error instead of returning an `Error err` result.
 
 Semantics
 ---------
@@ -67,10 +67,12 @@ The following table summarizes the correspondence between OCaml types and JSON v
 | `string`, `bytes`      | String     |                                  |
 | `char`                 | String     | Strictly one character in length |
 | `list`, `array`        | Array      |                                  |
+| A tuple                | Array      |                                  |
 | `ref`                  | 'a         |                                  |
 | `option`               | Null or 'a |                                  |
 | A record               | Object     |                                  |
 | `Yojson.Safe.t`        | any        | Identity transformation          |
+| `unit`                 | Null       |                                  |
 
 Variants (regular and polymorphic) are represented using arrays; the first element is a string with the name of the constructor, the rest are the arguments. Note that the implicit tuple in a polymorphic variant is flattened. For example:
 
@@ -174,7 +176,7 @@ type foo = {
  fvalue : float;
  svalue : string [@key "@svalue_json"];
  ivalue : int;
-} [@@deriving to_yojson { strict = false, fields = true } ]
+} [@@deriving to_yojson { strict = false, meta = true } ]
 end
 ```
 
