@@ -9,7 +9,7 @@ Sponsored by [Evil Martians](http://evilmartians.com).
 
 [pd]: https://github.com/ocaml-ppx/ppx_deriving
 [json]: http://tools.ietf.org/html/rfc4627
-[yojson]: http://mjambon.com/yojson.html
+[yojson]: https://github.com/ocaml-community/yojson
 
 Installation
 ------------
