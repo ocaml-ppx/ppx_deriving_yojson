@@ -23,11 +23,7 @@ let warning_39 () =
   Ast_helper.Attr.mk ~loc name (PStr [%str "-39"])
 
 
-#if OCAML_VERSION >= (4, 10, 0)
-let mod_mknoloc x = mknoloc (Some x)
-#else
 let mod_mknoloc x = mknoloc x
-#endif
 
 let deriver = "yojson"
 let raise_errorf = Ppx_deriving.raise_errorf
@@ -83,11 +79,12 @@ let parse_options options =
 
 let poly_fun names expr =
   List.fold_right (fun name expr ->
+      let loc = name.Location.loc in
       let name = name.Location.txt in
       [%expr fun [%p pvar ("poly_"^name)] -> [%e expr]]
     ) names expr
 
-let type_add_attrs typ attributes = 
+let type_add_attrs typ attributes =
   { typ with ptyp_attributes = typ.ptyp_attributes @ attributes }
 
 let rec ser_expr_of_typ typ =
@@ -95,6 +92,7 @@ let rec ser_expr_of_typ typ =
     | Some e -> e
     | None -> ser_expr_of_only_typ typ
 and ser_expr_of_only_typ typ =
+  let loc = typ.ptyp_loc in
   let attr_int_encoding typ =
     match attr_int_encoding typ with `String -> "String" | `Int -> "Intlit"
   in
@@ -174,6 +172,7 @@ and ser_expr_of_only_typ typ =
 
 (* http://desuchan.net/desu/src/1284751839295.jpg *)
 let rec desu_fold ~path f typs =
+  let loc = !Ast_helper.default_loc in
   typs |>
   List.mapi (fun i typ -> i, app (desu_expr_of_typ ~path typ) [evar (argn i)]) |>
   List.fold_left (fun x (i, y) ->
@@ -184,6 +183,7 @@ and desu_expr_of_typ ~path typ =
     | Some e -> e
     | None -> desu_expr_of_only_typ ~path typ
 and desu_expr_of_only_typ ~path typ =
+  let loc = typ.ptyp_loc in
   let error = [%expr Result.Error [%e str (String.concat "." path)]] in
   let decode' cases =
     Exp.function_ (
@@ -305,12 +305,14 @@ let wrap_runtime decls =
 
 let ser_type_of_decl ~options ~path:_ type_decl =
   ignore (parse_options options);
+  let loc = !Ast_helper.default_loc in
   let typ = Ppx_deriving.core_type_of_type_decl type_decl in
   let polymorphize = Ppx_deriving.poly_arrow_of_type_decl
                        (fun var -> [%type: [%t var] -> Yojson.Safe.t]) type_decl in
   polymorphize [%type: [%t typ] -> Yojson.Safe.t]
 
 let ser_str_of_record varname labels =
+  let loc = !Ast_helper.default_loc in
   let fields =
     labels |> List.mapi (fun _i { pld_name = { txt = name }; pld_type; pld_attributes } ->
       let field  = Exp.field (evar varname) (mknoloc (Lident name)) in
@@ -485,20 +487,25 @@ let ser_str_of_type_ext ~options ~path:_ ({ ptyext_path = { loc }} as type_ext) 
   let body = [%expr let fallback = [%e field] in [%e set_field]] in
   [Str.value ?loc:None Nonrecursive [Vb.mk (Pat.construct (lid "()") None) body]]
 
-let error_or typ = [%type: [%t typ] Ppx_deriving_yojson_runtime.error_or]
+let error_or typ =
+  let loc = typ.ptyp_loc in
+  [%type: [%t typ] Ppx_deriving_yojson_runtime.error_or]
 
 let desu_type_of_decl_poly ~options ~path:_ type_decl type_ =
   ignore (parse_options options);
+  let loc = !Ast_helper.default_loc in
   let polymorphize = Ppx_deriving.poly_arrow_of_type_decl
                        (fun var -> [%type: Yojson.Safe.t -> [%t error_or var]]) type_decl in
   polymorphize type_
 
 let desu_type_of_decl ~options ~path type_decl =
   let typ = Ppx_deriving.core_type_of_type_decl type_decl in
+  let loc = typ.ptyp_loc in
   desu_type_of_decl_poly ~options ~path type_decl [%type: Yojson.Safe.t -> [%t error_or typ]]
 
 
 let desu_str_of_record ~is_strict ~error ~path wrap_record labels =
+  let loc = !Ast_helper.default_loc in
   let top_error = error path in
   let record =
     List.fold_left
@@ -711,6 +718,7 @@ let ser_sig_of_type ~options ~path type_decl =
       (Ppx_deriving.fold_left_type_decl (fun acc name -> name :: acc) [] type_decl)
     in
     let typ = Ppx_deriving.core_type_of_type_decl type_decl in
+    let loc = typ.ptyp_loc in
     let polymorphize_ser  = Ppx_deriving.poly_arrow_of_type_decl
       (fun var -> [%type: [%t var] -> Yojson.Safe.t]) type_decl
     in
@@ -739,6 +747,7 @@ let desu_sig_of_type ~options ~path type_decl =
                       (desu_type_of_decl ~options ~path type_decl))
   in
   let typ = Ppx_deriving.core_type_of_type_decl type_decl in
+  let loc = typ.ptyp_loc in
   let of_yojson_exn =
     Sig.value (Val.mk (mknoloc (Ppx_deriving.mangle_type_decl (`Suffix "of_yojson_exn") type_decl))
                       (desu_type_of_decl_poly ~options ~path type_decl [%type: Yojson.Safe.t -> [%t typ]]))
@@ -782,6 +791,7 @@ let yojson_str_fields ~options ~path:_ type_decl =
   | true, kind ->
     match kind, type_decl.ptype_manifest with
     | Ptype_record labels, _ ->
+      let loc = !Ast_helper.default_loc in
       let fields =
         labels |> List.map (fun { pld_name = { txt = name }; pld_attributes } ->
           [%expr [%e str (attr_key name pld_attributes)]])
@@ -805,6 +815,7 @@ let yojson_sig_fields ~options ~path:_ type_decl =
   | true, kind ->
     match kind, type_decl.ptype_manifest with
     | Ptype_record _, _ ->
+      let loc = !Ast_helper.default_loc in
       [
         Sig.module_ (Md.mk (mod_mknoloc (Ppx_deriving.mangle_type_decl (`Prefix "Yojson_meta") type_decl))
                     (Mty.signature [
