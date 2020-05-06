@@ -206,7 +206,6 @@ let test_rec _ctxt =
   assert_roundtrip pp_r r_to_yojson r_of_yojson
                    {x=42; y="foo"} "{\"x\":42,\"y\":\"foo\"}"
 
-#if OCAML_VERSION >= (4, 03, 0)
 let test_recvar _ctxt =
   assert_roundtrip pp_rv rv_to_yojson rv_of_yojson
                    RA "[\"RA\"]";
@@ -216,7 +215,6 @@ let test_recvar _ctxt =
                    (RC(42, "foo")) "[\"RC\", 42, \"foo\"]";
   assert_roundtrip pp_rv rv_to_yojson rv_of_yojson
                    (RD{z="foo"}) "[\"RD\", {\"z\": \"foo\"}]"
-#endif
 
 type geo = {
   lat : float [@key "Latitude"]  ;
@@ -525,9 +523,7 @@ let suite = "Test ppx_yojson" >::: [
     "test_pvar"      >:: test_pvar;
     "test_var"       >:: test_var;
     "test_rec"       >:: test_rec;
-#if OCAML_VERSION >= (4, 03, 0)
     "test_recvar"    >:: test_recvar;
-#endif
     "test_key"       >:: test_key;
     "test_id"        >:: test_id;
     "test_custvar"   >:: test_custvar;
