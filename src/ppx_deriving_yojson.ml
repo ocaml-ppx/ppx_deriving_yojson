@@ -17,7 +17,7 @@ end
 
 open Ast_builder_default_loc
 
-let warning_39 () =
+let disable_warning_39 () =
   let loc = !Ast_helper.default_loc in
   let name = { txt = "ocaml.warning"; loc } in
   Ast_helper.Attr.mk ~loc name (PStr [%str "-39"])
@@ -431,7 +431,7 @@ let ser_str_of_type ~options ~path ({ ptype_loc = loc } as type_decl) =
     let var = pvar var_s in
     ([],
      [Vb.mk
-        ~attrs:[warning_39 ()]
+        ~attrs:[disable_warning_39 ()]
         (Pat.constraint_ var poly_type)
         (polymorphize [%expr ([%e wrap_runtime serializer])])],
      [Str.value Nonrecursive [Vb.mk [%expr [%e pvar "_"]] [%expr [%e evar var_s]]] ]
@@ -649,7 +649,7 @@ let desu_str_of_type ~options ~path ({ ptype_loc = loc } as type_decl) =
       loop ((List.mapi (fun i _ -> argn i) ptype_params) @ ["x"])
     in
     ([],
-     [Vb.mk ~attrs:[warning_39 ()]
+     [Vb.mk ~attrs:[disable_warning_39 ()]
             (Pat.constraint_ var poly_type)
             (polymorphize [%expr ([%e wrap_runtime desurializer])]) ],
      [Str.value Nonrecursive [Vb.mk [%expr [%e pvar "_"]] [%expr [%e evar var_s]]]]
