@@ -385,7 +385,7 @@ let ser_str_of_type ~options ~path ({ ptype_loc = loc } as type_decl) =
       let ty = Typ.poly poly_vars (polymorphize_ser [%type: [%t typ] -> Yojson.Safe.t]) in
       let default_fun =
         let type_path = String.concat "." (path @ [type_decl.ptype_name.txt]) in
-        let e_type_path = Exp.constant (Pconst_string (type_path, None)) in
+        let e_type_path = Exp.constant (Const.string type_path) in
         [%expr fun _ ->
           invalid_arg ("to_yojson: Maybe a [@@deriving yojson] is missing when extending the type "^
                        [%e e_type_path])]
