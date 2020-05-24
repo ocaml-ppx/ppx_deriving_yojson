@@ -6,12 +6,12 @@ install: wget https://raw.githubusercontent.com/ocaml/ocaml-travisci-skeleton/ma
 script: bash -ex ./.travis-docker.sh
 env:
   global:
-  - PINS="ppx_deriving_yojson:."
+  - PINS="ppx_deriving_yojson:. ppx_deriving:git://github.com/ocaml-ppx/ppx_deriving.git ocaml-migrate-parsetree:git://github.com/ocaml-ppx/ocaml-migrate-parsetree.git"
   matrix:
-  - PACKAGE="ppx_deriving_yojson" DISTRO="ubuntu-16.04"    OCAML_VERSION="4.10.0+rc2" OCAML_BETA="enable"
+  - PACKAGE="ppx_deriving_yojson" DISTRO="ubuntu-16.04"    OCAML_VERSION="4.11.0+trunk" OCAML_BETA="enable"
+  - PACKAGE="ppx_deriving_yojson" DISTRO="ubuntu-16.04"    OCAML_VERSION="4.10"
   - PACKAGE="ppx_deriving_yojson" DISTRO="ubuntu-16.04"    OCAML_VERSION="4.09"
   - PACKAGE="ppx_deriving_yojson" DISTRO="ubuntu-16.04"    OCAML_VERSION="4.08"
   - PACKAGE="ppx_deriving_yojson" DISTRO="ubuntu-16.04"    OCAML_VERSION="4.07"
   - PACKAGE="ppx_deriving_yojson" DISTRO="ubuntu-16.04"    OCAML_VERSION="4.06"
   - PACKAGE="ppx_deriving_yojson" DISTRO="ubuntu-16.04"    OCAML_VERSION="4.05"
-  - PACKAGE="ppx_deriving_yojson" DISTRO="ubuntu-16.04"    OCAML_VERSION="4.04"
