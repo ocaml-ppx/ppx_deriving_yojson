@@ -7,16 +7,14 @@ script: bash -ex ./.travis-docker.sh
 env:
   global:
   - PINS="ppx_deriving_yojson:."
+  - PACKAGE="ppx_deriving_yojson"
+  - DISTRO="ubuntu-16.04"
   matrix:
-  - PACKAGE="ppx_deriving_yojson" DISTRO="ubuntu-16.04"    OCAML_VERSION="4.11.0+trunk"
-    OCAML_BETA="enable"
-    PINS="ppx_deriving_yojson:.
-      ppx_deriving:https://github.com/ocaml-ppx/ppx_deriving.git#pre-ppxlib
-      ppx_tools:https://github.com/kit-ty-kate/ppx_tools.git#411"
-  - PACKAGE="ppx_deriving_yojson" DISTRO="ubuntu-16.04"    OCAML_VERSION="4.10"
-  - PACKAGE="ppx_deriving_yojson" DISTRO="ubuntu-16.04"    OCAML_VERSION="4.09"
-  - PACKAGE="ppx_deriving_yojson" DISTRO="ubuntu-16.04"    OCAML_VERSION="4.08"
-  - PACKAGE="ppx_deriving_yojson" DISTRO="ubuntu-16.04"    OCAML_VERSION="4.07"
-  - PACKAGE="ppx_deriving_yojson" DISTRO="ubuntu-16.04"    OCAML_VERSION="4.06"
-  - PACKAGE="ppx_deriving_yojson" DISTRO="ubuntu-16.04"    OCAML_VERSION="4.05"
-  - PACKAGE="ppx_deriving_yojson" DISTRO="ubuntu-16.04"    OCAML_VERSION="4.04"
+  - OCAML_VERSION="4.11.0+trunk" OCAML_BETA="enable"
+  - OCAML_VERSION="4.10"
+  - OCAML_VERSION="4.09"
+  - OCAML_VERSION="4.08"
+  - OCAML_VERSION="4.07"
+  - OCAML_VERSION="4.06"
+  - OCAML_VERSION="4.05"
+  - OCAML_VERSION="4.04"
