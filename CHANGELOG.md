@@ -1,6 +1,16 @@
 Changelog
 =========
 
+3.5.3
+-----
+
+  * Support for OCaml 4.11 (requires feature from `ppx_deriving.4.5`)
+    (#122)
+    Thierry Martinez
+  * Documentation improvements
+    (#115)
+    Olivier Andrieu
+
 3.5.2
 -----
 
