@@ -505,6 +505,18 @@ let test_int_redefined ctxt =
   let expected = `Int 1 in
   assert_equal ~ctxt ~printer:show_json expected M.x
 
+let test_equality_redefined ctxt =
+  let module M = struct
+    let (=) : int -> int -> bool = fun a b -> a = b
+    let _ = 1 = 1 (* just dummy usage of `=` to suppress compiler warning *)
+
+    type t = {field : int option [@default None]} [@@deriving to_yojson]
+    let x = {field = Some 42}
+  end
+  in
+  let expected = `Assoc ([("field", `Int (42))]) in
+  assert_equal ~ctxt ~printer:show_json expected M.(to_yojson x)
+
 let suite = "Test ppx_yojson" >::: [
     "test_unit"      >:: test_unit;
     "test_int"       >:: test_int;
@@ -537,6 +549,7 @@ let suite = "Test ppx_yojson" >::: [
     "test_opentype"  >:: test_opentype;
     "test_recursive" >:: test_recursive;
     "test_int_redefined" >:: test_int_redefined;
+    "test_equality_redefined" >:: test_equality_redefined;
   ]
 
 let _ =
