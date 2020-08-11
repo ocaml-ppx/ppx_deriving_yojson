@@ -321,7 +321,7 @@ let ser_str_of_record ~loc varname labels =
       | None ->
           [%expr [%e result] :: fields]
       | Some default ->
-          [%expr if [%e field] = [%e default] then fields else [%e result] :: fields])
+          [%expr if Pervasives.(=) [%e field] [%e default] then fields else [%e result] :: fields])
   in
   let assoc =
     List.fold_left
