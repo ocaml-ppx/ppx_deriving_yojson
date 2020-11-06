@@ -507,6 +507,10 @@ let test_int_redefined ctxt =
 
 let test_equality_redefined ctxt =
   let module M = struct
+    module Pervasives = struct
+      let (=) : int -> int -> bool = fun a b -> a = b
+      let _ = 1 = 1 (* just dummy usage of `=` to suppress compiler warning *)
+    end
     let (=) : int -> int -> bool = fun a b -> a = b
     let _ = 1 = 1 (* just dummy usage of `=` to suppress compiler warning *)
 
