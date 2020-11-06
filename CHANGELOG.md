@@ -1,5 +1,13 @@
-Changelog
-=========
+3.6.0
+-----
+
+  * Update to ppx_deriving 5.0 and ppxlib
+    (#121)
+    Rudi Grinberg, Thierry Martinez, Kate Deplaix and Gabriel Scherer
+
+  * Fix issues when the equality operator `(=)` is shadowed
+    (#126, #128, fixes #79)
+    Martin Slota, Kate Deplaix
 
 3.5.3
 -----
