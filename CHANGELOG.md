@@ -1,10 +1,3 @@
-3.6.1
------
-
-  * Update to ppxlib >= 0.14.0
-    (#127)
-    Kate Deplaix
-
 3.6.0
 -----
 
