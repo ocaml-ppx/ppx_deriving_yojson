@@ -13,7 +13,7 @@
     Rudi Grinberg, Thierry Martinez, Kate Deplaix and Gabriel Scherer
 
   * Fix issues when the equality operator `(=)` is shadowed
-    (#126, #128, fixes #79)
+    (#126, #128, #131, fixes #79)
     Martin Slota, Kate Deplaix
 
 3.5.3
