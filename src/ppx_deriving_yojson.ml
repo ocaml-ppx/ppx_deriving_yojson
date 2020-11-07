@@ -23,7 +23,7 @@ let disable_warning_39 () =
   Ast_helper.Attr.mk ~loc name (PStr [%str "-39"])
 
 
-let mod_mknoloc x = mknoloc x
+let mod_mknoloc x = mknoloc (Some x)
 
 let deriver = "yojson"
 let raise_errorf = Ppx_deriving.raise_errorf
@@ -369,7 +369,7 @@ let ser_str_of_type ~options ~path ({ ptype_loc = loc } as type_decl) =
       let ty = Typ.poly poly_vars (polymorphize_ser [%type: [%t typ] -> Yojson.Safe.t]) in
       let default_fun =
         let type_path = String.concat "." (path @ [type_decl.ptype_name.txt]) in
-        let e_type_path = Exp.constant (Pconst_string (type_path, None)) in
+        let e_type_path = Ast_builder.Default.estring ~loc:Location.none type_path in
         [%expr fun _ ->
           invalid_arg ("to_yojson: Maybe a [@@deriving yojson] is missing when extending the type "^
                        [%e e_type_path])]
