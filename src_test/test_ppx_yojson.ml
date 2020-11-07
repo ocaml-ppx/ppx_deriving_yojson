@@ -510,11 +510,13 @@ let test_equality_redefined ctxt =
     module Pervasives = struct
       let (=) : int -> int -> bool = fun a b -> a = b
       let _ = 1 = 1 (* just dummy usage of `=` to suppress compiler warning *)
+
+      let never_gonna_be_in_pervasives = None
     end
     let (=) : int -> int -> bool = fun a b -> a = b
     let _ = 1 = 1 (* just dummy usage of `=` to suppress compiler warning *)
 
-    type t = {field : int option [@default None]} [@@deriving to_yojson]
+    type t = {field : int option [@default Pervasives.never_gonna_be_in_pervasives]} [@@deriving to_yojson]
     let x = {field = Some 42}
   end
   in
