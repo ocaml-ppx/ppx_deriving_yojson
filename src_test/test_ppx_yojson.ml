@@ -505,6 +505,22 @@ let test_int_redefined ctxt =
   let expected = `Int 1 in
   assert_equal ~ctxt ~printer:show_json expected M.x
 
+(* TODO: Make this work *)
+(*
+let test_list_redefined ctxt =
+  let module M = struct
+    type redef_list =
+      | []
+      | (::) of int * int
+
+    type t = {field : int list} [@@deriving to_yojson]
+    let x = {field = List.([1;2])}
+  end
+  in
+  let expected = `List [`Int 1; `Int 2] in
+  assert_equal ~ctxt ~printer:show_json expected M.x
+*)
+
 let test_equality_redefined ctxt =
   let module M = struct
     module Pervasives = struct
