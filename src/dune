@@ -9,7 +9,7 @@
  (name ppx_deriving_yojson)
  (public_name ppx_deriving_yojson)
  (synopsis "[@@deriving yojson]")
- (libraries ppx_deriving.api)
+ (libraries ppxlib ppx_deriving.api)
  (preprocess (pps ppxlib.metaquot))
  (ppx_runtime_libraries ppx_deriving_yojson_runtime yojson)
  (modules ppx_deriving_yojson)
