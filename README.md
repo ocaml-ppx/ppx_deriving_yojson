@@ -11,6 +11,9 @@ Sponsored by [Evil Martians](http://evilmartians.com).
 [json]: http://tools.ietf.org/html/rfc4627
 [yojson]: https://github.com/ocaml-community/yojson
 
+Note: [ppx_yojson_conv](https://github.com/janestreet/ppx_yojson_conv) is a more recent deriving extension for Yojson that uses a more durable technical foundation and is more actively maintained.
+We keep maintaing `ppx_deriving_yojson` for our existing users, but we would recommend that *new projects* start from `ppx_yojson_conv` instead.
+
 Installation
 ------------
 
