@@ -1,3 +1,7 @@
+  * Reimplement map_bind to avoid stack overflows on js-of-ocaml
+    (#138)
+    P. Baudin
+
 3.6.1
 -----
 
