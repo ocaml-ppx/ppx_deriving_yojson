@@ -8,7 +8,9 @@ let (>|=) x f =
 
 let rec map_bind f acc xs =
   match xs with
-  | x :: xs -> f x >>= fun x -> map_bind f (x :: acc) xs
+  | x :: xs -> (match f x with
+      | ((Result.Error _) as x) -> x
+      | Result.Ok x -> map_bind f (x :: acc) xs)
   | [] -> Result.Ok (List.rev acc)
 
 type 'a error_or = ('a, string) Result.result
