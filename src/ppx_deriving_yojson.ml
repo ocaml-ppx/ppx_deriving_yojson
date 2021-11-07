@@ -341,7 +341,6 @@ let ser_str_of_type ~options ~path ({ ptype_loc = loc } as type_decl) =
   let typ = Ppx_deriving.core_type_of_type_decl type_decl in
   match type_decl.ptype_kind with
   | Ptype_open -> begin
-    (* TODO: sanitize something in this case? *)
     let to_yojson_name = Ppx_deriving.mangle_type_decl (`Suffix "to_yojson") type_decl in
     let mod_name = Ppx_deriving.mangle_type_decl
       (`PrefixSuffix ("M", "to_yojson")) type_decl
@@ -351,9 +350,9 @@ let ser_str_of_type ~options ~path ({ ptype_loc = loc } as type_decl) =
       let ser = ser_expr_of_typ quoter manifest in
       let lid = Ppx_deriving.mangle_lid (`PrefixSuffix ("M", "to_yojson")) lid in
       let orig_mod = Mod.ident (mknoloc lid) in
+      let poly_ser = polymorphize [%expr ([%e sanitize ~quoter ser] : [%t typ] -> Yojson.Safe.t)] in
       ([Str.module_ (Mb.mk (mod_mknoloc mod_name) orig_mod)],
-       [Vb.mk (pvar to_yojson_name)
-              (polymorphize [%expr ([%e ser] : [%t typ] -> Yojson.Safe.t)])],
+       [Vb.mk (pvar to_yojson_name) poly_ser],
        [])
     | Some _ ->
       raise_errorf ~loc "%s: extensible type manifest should be a type name" deriver
@@ -561,7 +560,6 @@ let desu_str_of_type ~options ~path ({ ptype_loc = loc } as type_decl) =
   let typ = Ppx_deriving.core_type_of_type_decl type_decl in
   match type_decl.ptype_kind with
   | Ptype_open -> begin
-    (* TODO: sanitize something in this case? *)
     let of_yojson_name = Ppx_deriving.mangle_type_decl (`Suffix "of_yojson") type_decl in
     let mod_name = Ppx_deriving.mangle_type_decl
       (`PrefixSuffix ("M", "of_yojson")) type_decl
