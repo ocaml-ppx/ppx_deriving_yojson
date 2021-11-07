@@ -543,10 +543,10 @@ module Sanitize =
 struct
   module Result =
   struct
-    type t = A [@@deriving to_yojson]
+    type t = A [@@deriving yojson]
   end
 
-  type result_list = Result.t list [@@deriving to_yojson]
+  type result_list = Result.t list [@@deriving yojson]
 end
 
 let suite = "Test ppx_yojson" >::: [
