@@ -301,11 +301,6 @@ and desu_expr_of_only_typ quoter ~path typ =
     raise_errorf ~loc:ptyp_loc "%s cannot be derived for %s"
                  deriver (Ppx_deriving.string_of_core_type typ)
 
-(* TODO: Do not wrap runtime around [@default ...].
-   We do currently and for instance the following doesn't currently work:
-   module List = struct let x = [1; 2] end
-   type t = {field : int list [@default List.x]} [@@deriving to_yojson]
-*)
 let wrap_runtime decls =
   Ppx_deriving.sanitize ~module_:(Lident "Ppx_deriving_yojson_runtime") decls
 
