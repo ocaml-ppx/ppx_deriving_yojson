@@ -301,8 +301,8 @@ and desu_expr_of_only_typ quoter ~path typ =
     raise_errorf ~loc:ptyp_loc "%s cannot be derived for %s"
                  deriver (Ppx_deriving.string_of_core_type typ)
 
-let wrap_runtime decls =
-  Ppx_deriving.sanitize ~module_:(Lident "Ppx_deriving_yojson_runtime") decls
+let sanitize ~quoter decls =
+  Ppx_deriving.sanitize ~quoter ~module_:(Lident "Ppx_deriving_yojson_runtime") decls
 
 let ser_type_of_decl ~options ~path:_ type_decl =
   ignore (parse_options options);
@@ -436,7 +436,7 @@ let ser_str_of_type ~options ~path ({ ptype_loc = loc } as type_decl) =
      [Vb.mk
         ~attrs:[disable_warning_39 ()]
         (Pat.constraint_ var poly_type)
-        (Ppx_deriving.sanitize ~quoter (polymorphize [%expr ([%e wrap_runtime serializer])]))],
+        (polymorphize [%expr ([%e sanitize ~quoter serializer])])],
      [Str.value Nonrecursive [Vb.mk [%expr [%e pvar "_"]] [%expr [%e evar var_s]]] ]
      )
 
@@ -485,7 +485,7 @@ let ser_str_of_type_ext ~options ~path:_ ({ ptyext_path = { loc }} as type_ext) 
     Longident.name mod_lid
   in
   let polymorphize = Ppx_deriving.poly_fun_of_type_ext type_ext in
-  let serializer = Ppx_deriving.sanitize ~quoter (polymorphize (wrap_runtime serializer)) in
+  let serializer = polymorphize (sanitize ~quoter serializer) in
   let flid = lid (Printf.sprintf "%s.f" mod_name) in
   let set_field = Exp.setfield (Exp.ident flid) flid serializer in
   let field = Exp.field (Exp.ident flid) (flid) in
@@ -571,7 +571,7 @@ let desu_str_of_type ~options ~path ({ ptype_loc = loc } as type_decl) =
       let desu = desu_expr_of_typ quoter ~path manifest in
       let lid = Ppx_deriving.mangle_lid (`PrefixSuffix ("M", "of_yojson")) lid in
       let orig_mod = Mod.ident (mknoloc lid) in
-      let poly_desu = polymorphize [%expr ([%e wrap_runtime desu] : Yojson.Safe.t -> _)] in
+      let poly_desu = polymorphize [%expr ([%e sanitize ~quoter desu] : Yojson.Safe.t -> _)] in
       ([Str.module_ (Mb.mk (mod_mknoloc mod_name) orig_mod)],
        [Vb.mk (pvar of_yojson_name) poly_desu],
        [])
@@ -649,7 +649,7 @@ let desu_str_of_type ~options ~path ({ ptype_loc = loc } as type_decl) =
     let var_s_exn_args = var_s_exn_args @ [evar "x"] in
     let var_s_exn_fun =
       let rec loop = function
-      | [] -> wrap_runtime ([%expr match  [%e app (evar var_s) var_s_exn_args] with Result.Ok x -> x | Result.Error err -> raise (Failure err)])
+      | [] -> sanitize ~quoter ([%expr match  [%e app (evar var_s) var_s_exn_args] with Result.Ok x -> x | Result.Error err -> raise (Failure err)])
       | hd::tl -> lam (pvar hd) (loop tl)
       in
       loop ((List.mapi (fun i _ -> argn i) ptype_params) @ ["x"])
@@ -657,7 +657,7 @@ let desu_str_of_type ~options ~path ({ ptype_loc = loc } as type_decl) =
     ([],
      [Vb.mk ~attrs:[disable_warning_39 ()]
             (Pat.constraint_ var poly_type)
-            (Ppx_deriving.sanitize ~quoter (polymorphize [%expr ([%e wrap_runtime desurializer])])) ],
+            (polymorphize [%expr ([%e sanitize ~quoter desurializer])]) ],
      [Str.value Nonrecursive [Vb.mk [%expr [%e pvar "_"]] [%expr [%e evar var_s]]]]
      @
      (if not want_exn then []
@@ -705,7 +705,7 @@ let desu_str_of_type_ext ~options ~path ({ ptyext_path = { loc } } as type_ext) 
     Longident.name mod_lid
   in
   let polymorphize = Ppx_deriving.poly_fun_of_type_ext type_ext in
-  let desurializer = Ppx_deriving.sanitize ~quoter (wrap_runtime (polymorphize desurializer)) in
+  let desurializer = sanitize ~quoter (polymorphize desurializer) in
   let flid = lid (Printf.sprintf "%s.f" mod_name) in
   let set_field = Exp.setfield (Exp.ident flid) flid desurializer in
   let field = Exp.field (Exp.ident flid) flid in
@@ -885,6 +885,17 @@ let on_str_decls f ~options ~path type_decls =
 let on_sig_decls f ~options ~path type_decls =
   List.concat (List.map (f ~options ~path) type_decls)
 
+(* outside of register-create to use our sanitize, not opened one from Ppx_deriving *)
+let ser_core_expr_of_typ typ =
+  let quoter = Ppx_deriving.create_quoter () in
+  let typ = Ppx_deriving.strong_type_of_type typ in
+  sanitize ~quoter (ser_expr_of_typ quoter typ)
+
+let desu_core_expr_of_typ typ =
+  let quoter = Ppx_deriving.create_quoter () in
+  let typ = Ppx_deriving.strong_type_of_type typ in
+  sanitize ~quoter (desu_expr_of_typ quoter ~path:[] typ)
+
 let () =
   Ppx_deriving.(register
    (create "yojson"
@@ -896,10 +907,7 @@ let () =
    ));
   Ppx_deriving.(register
    (create "to_yojson"
-    ~core_type:(fun typ ->
-      let quoter = Ppx_deriving.create_quoter () in
-      let typ = Ppx_deriving.strong_type_of_type typ in
-      Ppx_deriving.sanitize ~quoter (wrap_runtime (ser_expr_of_typ quoter typ)))
+    ~core_type:ser_core_expr_of_typ
     ~type_decl_str:(structure (on_str_decls str_of_type_to_yojson))
     ~type_ext_str:ser_str_of_type_ext
     ~type_decl_sig:(on_sig_decls sig_of_type_to_yojson)
@@ -908,10 +916,7 @@ let () =
   ));
   Ppx_deriving.(register
    (create "of_yojson"
-    ~core_type:(fun typ ->
-      let quoter = Ppx_deriving.create_quoter () in
-      let typ = Ppx_deriving.strong_type_of_type typ in
-      Ppx_deriving.sanitize ~quoter (wrap_runtime (desu_expr_of_typ quoter ~path:[] typ)))
+    ~core_type:desu_core_expr_of_typ
     ~type_decl_str:(structure (on_str_decls str_of_type_of_yojson))
     ~type_ext_str:desu_str_of_type_ext
     ~type_decl_sig:(on_sig_decls sig_of_type_of_yojson)
