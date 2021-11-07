@@ -322,6 +322,7 @@ let ser_str_of_record quoter ~loc varname labels =
       | None ->
           [%expr [%e result] :: fields]
       | Some default ->
+          let default = [%expr ([%e default] : [%t pld_type])] in
           [%expr if [%e field] = [%e Ppx_deriving.quote ~quoter default] then fields else [%e result] :: fields])
   in
   let assoc =
@@ -539,7 +540,9 @@ let desu_str_of_record quoter ~loc ~is_strict ~error ~path wrap_record labels =
     labels |> List.map (fun { pld_name = { txt = name }; pld_type; pld_attributes } ->
       match attr_default (pld_type.ptyp_attributes @ pld_attributes) with
       | None   -> error (path @ [name])
-      | Some x -> [%expr Result.Ok [%e Ppx_deriving.quote ~quoter x]])
+      | Some default ->
+        let default = [%expr ([%e default] : [%t pld_type])] in
+        [%expr Result.Ok [%e Ppx_deriving.quote ~quoter default]])
   in
   [%expr
     function

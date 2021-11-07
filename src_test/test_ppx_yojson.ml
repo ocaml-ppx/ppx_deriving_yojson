@@ -543,7 +543,7 @@ module Sanitize =
 struct
   module Result =
   struct
-    type t = A [@@deriving yojson]
+    type t = MyResult [@@deriving yojson]
   end
 
   type result_list = Result.t list [@@deriving yojson]
@@ -551,6 +551,8 @@ struct
   (* sanitize [@default ...] *)
   module List = struct let x = [1; 2] end
   type t = {field : int list [@default List.x]} [@@deriving to_yojson]
+
+  type t2 = {my: Result.t [@default MyResult]} [@@deriving yojson]
 end
 
 let suite = "Test ppx_yojson" >::: [
