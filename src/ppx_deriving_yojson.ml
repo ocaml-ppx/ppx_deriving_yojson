@@ -171,18 +171,18 @@ and ser_expr_of_only_typ quoter typ =
                  deriver (Ppx_deriving.string_of_core_type typ)
 
 (* http://desuchan.net/desu/src/1284751839295.jpg *)
-let rec desu_fold ~loc ~path f typs =
+let rec desu_fold quoter ~loc ~path f typs =
   typs |>
-  List.mapi (fun i typ -> i, app (desu_expr_of_typ ~path typ) [evar (argn i)]) |>
+  List.mapi (fun i typ -> i, app (desu_expr_of_typ quoter ~path typ) [evar (argn i)]) |>
   List.fold_left (fun x (i, y) ->
     let loc = x.pexp_loc in
     [%expr [%e y] >>= fun [%p pvar (argn i)] -> [%e x]])
     [%expr Result.Ok [%e f (List.mapi (fun i _ -> evar (argn i)) typs)]]
-and desu_expr_of_typ ~path typ =
+and desu_expr_of_typ quoter ~path typ =
   match attr_desu typ.ptyp_attributes with
-    | Some e -> e
-    | None -> desu_expr_of_only_typ ~path typ
-and desu_expr_of_only_typ ~path typ =
+    | Some e -> Ppx_deriving.quote ~quoter e
+    | None -> desu_expr_of_only_typ quoter ~path typ
+and desu_expr_of_only_typ quoter ~path typ =
   let loc = typ.ptyp_loc in
   let error = [%expr Result.Error [%e str (String.concat "." path)]] in
   let decode' cases =
@@ -191,6 +191,7 @@ and desu_expr_of_only_typ ~path typ =
       [Exp.case [%pat? _] error])
   in
   let decode pat exp = decode' [pat, exp] in
+  let desu_expr_of_typ = desu_expr_of_typ quoter in
   match typ with
   | [%type: unit]   -> decode [%pat? `Null] [%expr Result.Ok ()]
   | [%type: int]    -> decode [%pat? `Int x]    [%expr Result.Ok x]
@@ -238,7 +239,7 @@ and desu_expr_of_only_typ ~path typ =
   | [%type: Yojson.Safe.json] -> [%expr fun x -> Result.Ok x]
   | { ptyp_desc = Ptyp_tuple typs } ->
     decode [%pat? `List [%p plist (List.mapi (fun i _ -> pvar (argn i)) typs)]]
-           (desu_fold ~loc ~path tuple typs)
+           (desu_fold quoter ~loc ~path tuple typs)
   | { ptyp_desc = Ptyp_variant (fields, _, _); ptyp_loc } ->
     let inherits, tags = List.partition (fun field ->
       match field.prf_desc with
@@ -257,7 +258,7 @@ and desu_expr_of_only_typ ~path typ =
         let attrs = field.prf_attributes in
         Exp.case [%pat? `List ((`String [%p pstr (attr_name label attrs)]) :: [%p
                     plist (List.mapi (fun i _ -> pvar (argn i)) typs)])]
-                 (desu_fold ~loc ~path (fun x -> (Exp.variant label (Some (tuple x)))) typs)
+                 (desu_fold quoter ~loc ~path (fun x -> (Exp.variant label (Some (tuple x)))) typs)
       | Rtag(label, false, [typ]) ->
         let label = label.txt in
         let attrs = field.prf_attributes in
@@ -286,8 +287,8 @@ and desu_expr_of_only_typ ~path typ =
     [%expr fun (json : Yojson.Safe.t) ->
       [%e Exp.match_ [%expr json] (tag_cases @ [inherits_case])]]
   | { ptyp_desc = Ptyp_constr ({ txt = lid }, args) } ->
-     let fwd = app (Exp.ident (mknoloc (Ppx_deriving.mangle_lid (`Suffix "of_yojson") lid)))
-             (List.map (desu_expr_of_typ ~path) args) in
+     let desu_fn = Exp.ident (mknoloc (Ppx_deriving.mangle_lid (`Suffix "of_yojson") lid)) in
+     let fwd = app (Ppx_deriving.quote ~quoter desu_fn) (List.map (desu_expr_of_typ ~path) args) in
      (* eta-expansion is necessary for recursive groups *)
      [%expr fun x -> [%e fwd] x]
   | { ptyp_desc = Ptyp_var name } ->
@@ -513,7 +514,7 @@ let desu_type_of_decl ~options ~path type_decl =
   desu_type_of_decl_poly ~options ~path type_decl [%type: Yojson.Safe.t -> [%t error_or typ]]
 
 
-let desu_str_of_record ~loc ~is_strict ~error ~path wrap_record labels =
+let desu_str_of_record quoter ~loc ~is_strict ~error ~path wrap_record labels =
   let top_error = error path in
   let record =
     List.fold_left
@@ -534,7 +535,7 @@ let desu_str_of_record ~loc ~is_strict ~error ~path wrap_record labels =
         let path = path @ [name] in
         let thunks = labels |> List.mapi (fun j _ ->
              if i = j
-             then app (desu_expr_of_typ ~path @@ type_add_attrs pld_type pld_attributes) [evar "x"]
+             then app (desu_expr_of_typ quoter ~path @@ type_add_attrs pld_type pld_attributes) [evar "x"]
              else evar (argn j)) in
         Exp.case [%pat? ([%p pstr (attr_key name pld_attributes)], x) :: xs]
           [%expr loop xs [%e tuple thunks]])) @
@@ -544,7 +545,7 @@ let desu_str_of_record ~loc ~is_strict ~error ~path wrap_record labels =
     labels |> List.map (fun { pld_name = { txt = name }; pld_type; pld_attributes } ->
       match attr_default (pld_type.ptyp_attributes @ pld_attributes) with
       | None   -> error (path @ [name])
-      | Some x -> [%expr Result.Ok [%e x]])
+      | Some x -> [%expr Result.Ok [%e Ppx_deriving.quote ~quoter x]])
   in
   [%expr
     function
@@ -557,6 +558,7 @@ let desu_str_of_record ~loc ~is_strict ~error ~path wrap_record labels =
 
 let desu_str_of_type ~options ~path ({ ptype_loc = loc } as type_decl) =
   let { is_strict; want_exn; _ } = parse_options options in
+  let quoter = Ppx_deriving.create_quoter () in
   let path = path @ [type_decl.ptype_name.txt] in
   let error path = [%expr Result.Error [%e str (String.concat "." path)]] in
   let top_error = error path in
@@ -564,13 +566,14 @@ let desu_str_of_type ~options ~path ({ ptype_loc = loc } as type_decl) =
   let typ = Ppx_deriving.core_type_of_type_decl type_decl in
   match type_decl.ptype_kind with
   | Ptype_open -> begin
+    (* TODO: sanitize something in this case? *)
     let of_yojson_name = Ppx_deriving.mangle_type_decl (`Suffix "of_yojson") type_decl in
     let mod_name = Ppx_deriving.mangle_type_decl
       (`PrefixSuffix ("M", "of_yojson")) type_decl
     in
     match type_decl.ptype_manifest with
     | Some ({ ptyp_desc = Ptyp_constr ({ txt = lid }, _args) } as manifest) ->
-      let desu = desu_expr_of_typ ~path manifest in
+      let desu = desu_expr_of_typ quoter ~path manifest in
       let lid = Ppx_deriving.mangle_lid (`PrefixSuffix ("M", "of_yojson")) lid in
       let orig_mod = Mod.ident (mknoloc lid) in
       let poly_desu = polymorphize [%expr ([%e wrap_runtime desu] : Yojson.Safe.t -> _)] in
@@ -615,7 +618,7 @@ let desu_str_of_type ~options ~path ({ ptype_loc = loc } as type_decl) =
       match kind, type_decl.ptype_manifest with
       | Ptype_open, _ -> assert false
       | Ptype_abstract, Some manifest ->
-        desu_expr_of_typ ~path manifest
+        desu_expr_of_typ quoter ~path manifest
       | Ptype_variant constrs, _ ->
         let cases = List.map (fun { pcd_loc = loc; pcd_name = { txt = name' }; pcd_args; pcd_attributes } ->
           match pcd_args with
@@ -623,11 +626,11 @@ let desu_str_of_type ~options ~path ({ ptype_loc = loc } as type_decl) =
             Exp.case
               [%pat? `List ((`String [%p pstr (attr_name name' pcd_attributes)]) ::
                                      [%p plist (List.mapi (fun i _ -> pvar (argn i)) args)])]
-              (desu_fold ~loc ~path (fun x -> constr name' x) args)
+              (desu_fold quoter ~loc ~path (fun x -> constr name' x) args)
           | Pcstr_record labels ->
             let wrap_record r = constr name' [r] in
             let sub =
-              desu_str_of_record ~loc ~is_strict ~error ~path wrap_record labels in
+              desu_str_of_record quoter ~loc ~is_strict ~error ~path wrap_record labels in
             Exp.case
               [%pat? `List ((`String [%p pstr (attr_name name' pcd_attributes)]) ::
                               [%p plist [pvar (argn 0)]])]
@@ -636,7 +639,7 @@ let desu_str_of_type ~options ~path ({ ptype_loc = loc } as type_decl) =
         in
         Exp.function_ (cases @ [Exp.case [%pat? _] top_error])
       | Ptype_record labels, _ ->
-        desu_str_of_record ~loc ~is_strict ~error ~path (fun r -> r) labels
+        desu_str_of_record quoter ~loc ~is_strict ~error ~path (fun r -> r) labels
       | Ptype_abstract, None ->
         raise_errorf ~loc "%s cannot be derived for fully abstract types" deriver
     in
@@ -659,7 +662,7 @@ let desu_str_of_type ~options ~path ({ ptype_loc = loc } as type_decl) =
     ([],
      [Vb.mk ~attrs:[disable_warning_39 ()]
             (Pat.constraint_ var poly_type)
-            (polymorphize [%expr ([%e wrap_runtime desurializer])]) ],
+            (Ppx_deriving.sanitize ~quoter (polymorphize [%expr ([%e wrap_runtime desurializer])])) ],
      [Str.value Nonrecursive [Vb.mk [%expr [%e pvar "_"]] [%expr [%e evar var_s]]]]
      @
      (if not want_exn then []
@@ -670,6 +673,7 @@ let desu_str_of_type ~options ~path ({ ptype_loc = loc } as type_decl) =
 
 let desu_str_of_type_ext ~options ~path ({ ptyext_path = { loc } } as type_ext) =
   ignore(parse_options options);
+  let quoter = Ppx_deriving.create_quoter () in
   let desurializer =
     let pats =
       List.fold_right (fun { pext_name = { txt = name' }; pext_kind; pext_attributes } acc_cases ->
@@ -685,7 +689,7 @@ let desu_str_of_type_ext ~options ~path ({ ptyext_path = { loc } } as type_ext) 
               Exp.case
                 [%pat? `List ((`String [%p pstr (attr_name name' pext_attributes)]) ::
                                        [%p plist (List.mapi (fun i _ -> pvar (argn i)) args)])]
-                (desu_fold ~loc ~path (fun x -> constr name' x) args)
+                (desu_fold quoter ~loc ~path (fun x -> constr name' x) args)
             | Pcstr_record _ ->
               raise_errorf ~loc "%s: record variants are not supported in extensible types" deriver
           in
@@ -706,7 +710,7 @@ let desu_str_of_type_ext ~options ~path ({ ptyext_path = { loc } } as type_ext) 
     Longident.name mod_lid
   in
   let polymorphize = Ppx_deriving.poly_fun_of_type_ext type_ext in
-  let desurializer = wrap_runtime (polymorphize desurializer) in
+  let desurializer = Ppx_deriving.sanitize ~quoter (wrap_runtime (polymorphize desurializer)) in
   let flid = lid (Printf.sprintf "%s.f" mod_name) in
   let set_field = Exp.setfield (Exp.ident flid) flid desurializer in
   let field = Exp.field (Exp.ident flid) flid in
@@ -910,8 +914,9 @@ let () =
   Ppx_deriving.(register
    (create "of_yojson"
     ~core_type:(fun typ ->
+      let quoter = Ppx_deriving.create_quoter () in
       let typ = Ppx_deriving.strong_type_of_type typ in
-      wrap_runtime (desu_expr_of_typ ~path:[] typ))
+      Ppx_deriving.sanitize ~quoter (wrap_runtime (desu_expr_of_typ quoter ~path:[] typ)))
     ~type_decl_str:(structure (on_str_decls str_of_type_of_yojson))
     ~type_ext_str:desu_str_of_type_ext
     ~type_decl_sig:(on_sig_decls sig_of_type_of_yojson)
