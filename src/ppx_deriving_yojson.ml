@@ -886,7 +886,7 @@ let on_str_decls f ~options ~path type_decls =
 let on_sig_decls f ~options ~path type_decls =
   List.concat (List.map (f ~options ~path) type_decls)
 
-(* outside of register-create to use our sanitize, not opened one from Ppx_deriving *)
+(* Note: we are careful to call our sanitize function here, not Ppx_deriving.sanitize. *)
 let ser_core_expr_of_typ typ =
   let quoter = Ppx_deriving.create_quoter () in
   let typ = Ppx_deriving.strong_type_of_type typ in
