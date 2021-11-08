@@ -539,6 +539,22 @@ let test_equality_redefined ctxt =
   let expected = `Assoc ([("field", `Int (42))]) in
   assert_equal ~ctxt ~printer:show_json expected M.(to_yojson x)
 
+module Sanitize =
+struct
+  module Result =
+  struct
+    type t = MyResult [@@deriving yojson]
+  end
+
+  type result_list = Result.t list [@@deriving yojson]
+
+  (* sanitize [@default ...] *)
+  module List = struct let x = [1; 2] end
+  type t = {field : int list [@default List.x]} [@@deriving to_yojson]
+
+  type t2 = {my: Result.t [@default MyResult]} [@@deriving yojson]
+end
+
 let suite = "Test ppx_yojson" >::: [
     "test_unit"      >:: test_unit;
     "test_int"       >:: test_int;
