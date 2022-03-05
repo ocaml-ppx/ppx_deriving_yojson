@@ -451,7 +451,9 @@ let ser_str_of_type_ext ~options ~path:_ ({ ptyext_path = { loc }} as type_ext) 
           (* nothing to do, since the constructor must be handled in original
              constructor declaration *)
           acc_cases
-        | Pext_decl (pext_args, _) ->
+        | Pext_decl (_ :: _, _, _) ->
+          raise_errorf ~loc "%s: Explicit binders for type variables not supported" deriver
+        | Pext_decl ([], pext_args, _) ->
           let json_name = attr_name name' pext_attributes in
           let case =
             match pext_args with
@@ -678,7 +680,9 @@ let desu_str_of_type_ext ~options ~path ({ ptyext_path = { loc } } as type_ext) 
           (* nothing to do since it must have been handled in the original
              constructor declaration *)
           acc_cases
-        | Pext_decl (pext_args, _) ->
+        | Pext_decl (_ :: _, _, _) ->
+          raise_errorf ~loc "%s: Explicit binders for type variables not allowed" deriver
+        | Pext_decl ([], pext_args, _) ->
           let case =
             match pext_args with
             | Pcstr_tuple(args) ->
