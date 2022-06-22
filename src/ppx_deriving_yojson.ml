@@ -437,7 +437,7 @@ let ser_str_of_type ~options ~path ({ ptype_loc = loc } as type_decl) =
         ~attrs:[disable_warning_39 ()]
         (Pat.constraint_ var poly_type)
         (polymorphize [%expr ([%e sanitize ~quoter serializer])])],
-     [Str.value Nonrecursive [Vb.mk [%expr [%e pvar "_"]] [%expr [%e evar var_s]]] ]
+     [Str.value Nonrecursive [Vb.mk [%pat? [%p pvar "_"]] [%expr [%e evar var_s]]] ]
      )
 
 let ser_str_of_type_ext ~options ~path:_ ({ ptyext_path = { loc }} as type_ext) =
@@ -659,12 +659,12 @@ let desu_str_of_type ~options ~path ({ ptype_loc = loc } as type_decl) =
      [Vb.mk ~attrs:[disable_warning_39 ()]
             (Pat.constraint_ var poly_type)
             (polymorphize [%expr ([%e sanitize ~quoter desurializer])]) ],
-     [Str.value Nonrecursive [Vb.mk [%expr [%e pvar "_"]] [%expr [%e evar var_s]]]]
+     [Str.value Nonrecursive [Vb.mk [%pat? [%p pvar "_"]] [%expr [%e evar var_s]]]]
      @
      (if not want_exn then []
       else
-        [Str.value Nonrecursive [Vb.mk [%expr [%e pvar var_s_exn]] var_s_exn_fun]
-        ;Str.value Nonrecursive [Vb.mk [%expr [%e pvar "_"]] [%expr [%e evar var_s_exn]]]])
+        [Str.value Nonrecursive [Vb.mk [%pat? [%p pvar var_s_exn]] var_s_exn_fun]
+        ;Str.value Nonrecursive [Vb.mk [%pat? [%p pvar "_"]] [%expr [%e evar var_s_exn]]]])
      )
 
 let desu_str_of_type_ext ~options ~path ({ ptyext_path = { loc } } as type_ext) =
@@ -811,8 +811,8 @@ let yojson_str_fields ~options ~path:_ type_decl =
         [
           Str.module_ (Mb.mk (mod_mknoloc (Ppx_deriving.mangle_type_decl (`Prefix "Yojson_meta") type_decl))
                       (Mod.structure [
-            Str.value Nonrecursive [Vb.mk [%expr [%e pvar "keys"]] [%expr [%e flist]]]
-          ; Str.value Nonrecursive [Vb.mk [%expr [%e pvar "_"]] [%expr [%e evar "keys"]]]
+            Str.value Nonrecursive [Vb.mk [%pat? [%p pvar "keys"]] [%expr [%e flist]]]
+          ; Str.value Nonrecursive [Vb.mk [%pat? [%p pvar "_"]] [%expr [%e evar "keys"]]]
           ]))
         ]
     | _ -> []
