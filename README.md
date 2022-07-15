@@ -30,8 +30,8 @@ If you are using dune, add `ppx_deriving_json` to the `preprocess` entry, and `p
 
 ```
 ...
-(libraries  yojson core ppx_deriving_yojson.runtime) ;
-(preprocess (pps ppx_deriving_yojson)) ;
+(libraries  yojson core ppx_deriving_yojson.runtime)
+(preprocess (pps ppx_deriving_yojson))
 ...
 ```
 
