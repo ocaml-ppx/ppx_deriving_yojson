@@ -304,8 +304,7 @@ and desu_expr_of_only_typ ~quoter ~path typ =
 let sanitize ~quoter decls =
   Ppx_deriving.sanitize ~quoter ~module_:(Lident "Ppx_deriving_yojson_runtime") decls
 
-let ser_type_of_decl ~options ~path:_ type_decl =
-  ignore (parse_options options);
+let ser_type_of_decl ~options:_ ~path:_ type_decl =
   let loc = type_decl.ptype_loc in
   let typ = Ppx_deriving.core_type_of_type_decl type_decl in
   let polymorphize = Ppx_deriving.poly_arrow_of_type_decl
@@ -336,7 +335,6 @@ let ser_str_of_record ~quoter ~loc varname labels =
 
 
 let ser_str_of_type ~options ~path ({ ptype_loc = loc } as type_decl) =
-  ignore (parse_options options);
   let quoter = Ppx_deriving.create_quoter () in
   let polymorphize = Ppx_deriving.poly_fun_of_type_decl type_decl in
   let typ = Ppx_deriving.core_type_of_type_decl type_decl in
@@ -440,8 +438,7 @@ let ser_str_of_type ~options ~path ({ ptype_loc = loc } as type_decl) =
      [Str.value Nonrecursive [Vb.mk (pvar "_") [%expr [%e evar var_s]]] ]
      )
 
-let ser_str_of_type_ext ~options ~path:_ ({ ptyext_path = { loc }} as type_ext) =
-  ignore (parse_options options);
+let ser_str_of_type_ext ~options:_ ~path:_ ({ ptyext_path = { loc }} as type_ext) =
   let quoter = Ppx_deriving.create_quoter () in
   let serializer =
     let pats =
@@ -496,8 +493,7 @@ let error_or typ =
   let loc = typ.ptyp_loc in
   [%type: [%t typ] Ppx_deriving_yojson_runtime.error_or]
 
-let desu_type_of_decl_poly ~options ~path:_ type_decl type_ =
-  ignore (parse_options options);
+let desu_type_of_decl_poly ~options:_ ~path:_ type_decl type_ =
   let loc = type_decl.ptype_loc in
   let polymorphize = Ppx_deriving.poly_arrow_of_type_decl
                        (fun var -> [%type: Yojson.Safe.t -> [%t error_or var]]) type_decl in
@@ -554,7 +550,7 @@ let desu_str_of_record ~quoter ~loc ~is_strict ~error ~path wrap_record labels =
 
 
 let desu_str_of_type ~options ~path ({ ptype_loc = loc } as type_decl) =
-  let { is_strict; want_exn; _ } = parse_options options in
+  let { is_strict; want_exn; _ } = options in
   let quoter = Ppx_deriving.create_quoter () in
   let path = path @ [type_decl.ptype_name.txt] in
   let error path = [%expr Result.Error [%e str (String.concat "." path)]] in
@@ -667,8 +663,7 @@ let desu_str_of_type ~options ~path ({ ptype_loc = loc } as type_decl) =
         ;Str.value Nonrecursive [Vb.mk (pvar "_") [%expr [%e evar var_s_exn]]]])
      )
 
-let desu_str_of_type_ext ~options ~path ({ ptyext_path = { loc } } as type_ext) =
-  ignore(parse_options options);
+let desu_str_of_type_ext ~options:_ ~path ({ ptyext_path = { loc } } as type_ext) =
   let quoter = Ppx_deriving.create_quoter () in
   let desurializer =
     let pats =
@@ -750,7 +745,7 @@ let ser_sig_of_type ~options ~path type_decl =
 let ser_sig_of_type_ext ~options:_ ~path:_ _type_ext = []
 
 let desu_sig_of_type ~options ~path type_decl =
-  let { want_exn; _ } = parse_options options in
+  let { want_exn; _ } = options in
   let of_yojson =
     Sig.value (Val.mk (mknoloc (Ppx_deriving.mangle_type_decl (`Suffix "of_yojson") type_decl))
                       (desu_type_of_decl ~options ~path type_decl))
@@ -794,7 +789,7 @@ let desu_sig_of_type ~options ~path type_decl =
 let desu_sig_of_type_ext ~options:_ ~path:_ _type_ext = []
 
 let yojson_str_fields ~options ~path:_ type_decl =
-  let { want_meta; _ } = parse_options options in
+  let { want_meta; _ } = options in
   match want_meta, type_decl.ptype_kind with
   | false, _ | true, Ptype_open -> []
   | true, kind ->
@@ -818,7 +813,7 @@ let yojson_str_fields ~options ~path:_ type_decl =
     | _ -> []
 
 let yojson_sig_fields ~options ~path:_ type_decl =
-  let { want_meta; _ } = parse_options options in
+  let { want_meta; _ } = options in
   match want_meta, type_decl.ptype_kind with
   | false, _ | true, Ptype_open -> []
   | true, kind ->
@@ -871,6 +866,7 @@ let sig_of_type_ext ~options ~path type_ext =
   (desu_sig_of_type_ext ~options ~path type_ext)
 
 let structure f ~options ~path type_ =
+  let options = parse_options options in
   let (pre, vals, post) = f ~options ~path type_ in
   match vals with
   | [] -> pre @ post
@@ -884,6 +880,7 @@ let on_str_decls f ~options ~path type_decls =
   (List.concat pre, List.concat vals, List.concat post)
 
 let on_sig_decls f ~options ~path type_decls =
+  let options = parse_options options in
   List.concat (List.map (f ~options ~path) type_decls)
 
 (* Note: we are careful to call our sanitize function here, not Ppx_deriving.sanitize. *)
