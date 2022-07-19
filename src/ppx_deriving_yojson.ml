@@ -923,9 +923,7 @@ let _of_deriving: Deriving.t =
     ~str_type_ext:(Deriving.Generator.V2.make (args ()) (convert_args desu_str_of_type_ext))
     ~sig_type_ext:(Deriving.Generator.V2.make (args ()) (convert_args desu_sig_of_type_ext))
 
-(* Not just alias because yojson also has meta *)
-(* let _deriving: Deriving.t =
-  Deriving.add_alias "yojson" [_to_deriving; _of_deriving] *)
+(* Not just alias because yojson also has meta (without its own deriver name) *)
 let _deriving: Deriving.t =
   Deriving.add
     "yojson"
