@@ -903,7 +903,6 @@ let make_gen f =
 let _to_deriving: Deriving.t =
   Deriving.add
     "to_yojson"
-    ~extension:(fun ~loc:_ ~path:_ -> ser_core_expr_of_typ)
     ~str_type_decl:(make_gen (fun ~options ~path (_, type_decls) ->
         structure (on_str_decls str_of_type_to_yojson) ~options ~path type_decls
       ))
@@ -916,7 +915,6 @@ let _to_deriving: Deriving.t =
 let _of_deriving: Deriving.t =
   Deriving.add
     "of_yojson"
-    ~extension:(fun ~loc:_ ~path:_ -> desu_core_expr_of_typ)
     ~str_type_decl:(make_gen (fun ~options ~path (_, type_decls) ->
         structure (on_str_decls str_of_type_of_yojson) ~options ~path type_decls
       ))
@@ -938,3 +936,18 @@ let _deriving: Deriving.t =
       ))
     ~str_type_ext:(make_gen str_of_type_ext)
     ~sig_type_ext:(make_gen sig_of_type_ext)
+
+(* custom extensions such that "derive"-prefixed also works *)
+let to_derive_extension =
+  Extension.V3.declare "derive.to_yojson" Extension.Context.expression
+    Ast_pattern.(ptyp __) (fun ~ctxt:_ -> ser_core_expr_of_typ)
+let of_derive_extension =
+  Extension.V3.declare "derive.of_yojson" Extension.Context.expression
+    Ast_pattern.(ptyp __) (fun ~ctxt:_ -> desu_core_expr_of_typ)
+let _derive_transformation =
+  Driver.register_transformation
+    deriver
+    ~rules:[
+      Context_free.Rule.extension to_derive_extension;
+      Context_free.Rule.extension of_derive_extension;
+    ]
