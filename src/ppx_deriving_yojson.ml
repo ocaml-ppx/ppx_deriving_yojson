@@ -60,22 +60,12 @@ type options = {
   want_exn: bool;
 }
 
-let parse_options options =
-  let strict = ref true in
-  let meta = ref false in
-  let exn = ref false in
-  let get_bool = Ppx_deriving.Arg.(get_expr ~deriver bool) in
-  options |> List.iter (fun (name, expr) ->
-    match name with
-    | "strict" -> strict := get_bool expr
-    | "meta" -> meta := get_bool expr
-    | "exn" -> exn := get_bool expr
-    | _ -> raise_errorf ~loc:expr.pexp_loc "%s does not support option %s" deriver name);
-  {
-    is_strict = !strict;
-    want_meta = !meta;
-    want_exn = !exn;
-  }
+let ebool: _ Ast_pattern.t -> _ Ast_pattern.t =
+  Ast_pattern.map1 ~f:(function
+    | [%expr true] -> true
+    | [%expr false] -> false
+    | _ -> failwith "not bool")
+let args () = Deriving.Args.(empty +> arg "strict" (ebool __) +> arg "meta" (ebool __) +> arg "exn" (ebool __))
 
 let poly_fun names expr =
   List.fold_right (fun name expr ->
@@ -866,7 +856,6 @@ let sig_of_type_ext ~options ~path type_ext =
   (desu_sig_of_type_ext ~options ~path type_ext)
 
 let structure f ~options ~path type_ =
-  let options = parse_options options in
   let (pre, vals, post) = f ~options ~path type_ in
   match vals with
   | [] -> pre @ post
@@ -880,7 +869,6 @@ let on_str_decls f ~options ~path type_decls =
   (List.concat pre, List.concat vals, List.concat post)
 
 let on_sig_decls f ~options ~path type_decls =
-  let options = parse_options options in
   List.concat (List.map (f ~options ~path) type_decls)
 
 (* Note: we are careful to call our sanitize function here, not Ppx_deriving.sanitize. *)
@@ -894,30 +882,63 @@ let desu_core_expr_of_typ typ =
   let typ = Ppx_deriving.strong_type_of_type typ in
   sanitize ~quoter (desu_expr_of_typ ~quoter ~path:[] typ)
 
-let () =
-  Ppx_deriving.(register
-   (create "yojson"
-    ~type_decl_str:(structure (on_str_decls str_of_type))
-    ~type_ext_str:str_of_type_ext
-    ~type_decl_sig:(on_sig_decls sig_of_type)
-    ~type_ext_sig:sig_of_type_ext
-    ()
-   ));
-  Ppx_deriving.(register
-   (create "to_yojson"
-    ~core_type:ser_core_expr_of_typ
-    ~type_decl_str:(structure (on_str_decls str_of_type_to_yojson))
-    ~type_ext_str:ser_str_of_type_ext
-    ~type_decl_sig:(on_sig_decls sig_of_type_to_yojson)
-    ~type_ext_sig:ser_sig_of_type_ext
-    ()
-  ));
-  Ppx_deriving.(register
-   (create "of_yojson"
-    ~core_type:desu_core_expr_of_typ
-    ~type_decl_str:(structure (on_str_decls str_of_type_of_yojson))
-    ~type_ext_str:desu_str_of_type_ext
-    ~type_decl_sig:(on_sig_decls sig_of_type_of_yojson)
-    ~type_ext_sig:desu_sig_of_type_ext
-    ()
-  ))
+let convert_args f ~ctxt x strict meta exn =
+  let is_strict = match strict with
+    | Some strict -> strict
+    | None -> true (* by default *)
+  in
+  let want_meta = match meta with
+    | Some meta -> meta
+    | None -> false (* by default *)
+  in
+  let want_exn = match exn with
+    | Some exn -> exn
+    | None -> false (* by default *)
+  in
+  let options = { is_strict; want_meta; want_exn } in
+  let path =
+    let code_path = Expansion_context.Deriver.code_path ctxt in
+    Code_path.(main_module_name code_path :: submodule_path code_path)
+  in
+  f ~options ~path x
+
+let _to_deriving: Deriving.t =
+  Deriving.add
+    "to_yojson"
+    ~extension:(fun ~loc:_ ~path:_ -> ser_core_expr_of_typ)
+    ~str_type_decl:(Deriving.Generator.V2.make (args ()) (convert_args (fun ~options ~path (_, type_decls) ->
+        structure (on_str_decls str_of_type_to_yojson) ~options ~path type_decls
+      )))
+    ~sig_type_decl:(Deriving.Generator.V2.make (args ()) (convert_args (fun ~options ~path (_, type_decls) ->
+        on_sig_decls sig_of_type_to_yojson ~options ~path type_decls
+      )))
+    ~str_type_ext:(Deriving.Generator.V2.make (args ()) (convert_args ser_str_of_type_ext))
+    ~sig_type_ext:(Deriving.Generator.V2.make (args ()) (convert_args ser_sig_of_type_ext))
+
+let _of_deriving: Deriving.t =
+  Deriving.add
+    "of_yojson"
+    ~extension:(fun ~loc:_ ~path:_ -> desu_core_expr_of_typ)
+    ~str_type_decl:(Deriving.Generator.V2.make (args ()) (convert_args (fun ~options ~path (_, type_decls) ->
+        structure (on_str_decls str_of_type_of_yojson) ~options ~path type_decls
+      )))
+    ~sig_type_decl:(Deriving.Generator.V2.make (args ()) (convert_args (fun ~options ~path (_, type_decls) ->
+        on_sig_decls sig_of_type_of_yojson ~options ~path type_decls
+      )))
+    ~str_type_ext:(Deriving.Generator.V2.make (args ()) (convert_args desu_str_of_type_ext))
+    ~sig_type_ext:(Deriving.Generator.V2.make (args ()) (convert_args desu_sig_of_type_ext))
+
+(* Not just alias because yojson also has meta *)
+(* let _deriving: Deriving.t =
+  Deriving.add_alias "yojson" [_to_deriving; _of_deriving] *)
+let _deriving: Deriving.t =
+  Deriving.add
+    "yojson"
+    ~str_type_decl:(Deriving.Generator.V2.make (args ()) (convert_args (fun ~options ~path (_, type_decls) ->
+        structure (on_str_decls str_of_type) ~options ~path type_decls
+      )))
+    ~sig_type_decl:(Deriving.Generator.V2.make (args ()) (convert_args (fun ~options ~path (_, type_decls) ->
+        on_sig_decls sig_of_type ~options ~path type_decls
+      )))
+    ~str_type_ext:(Deriving.Generator.V2.make (args ()) (convert_args str_of_type_ext))
+    ~sig_type_ext:(Deriving.Generator.V2.make (args ()) (convert_args sig_of_type_ext))
