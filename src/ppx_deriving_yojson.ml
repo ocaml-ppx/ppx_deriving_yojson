@@ -877,61 +877,64 @@ let desu_core_expr_of_typ typ =
   let typ = Ppx_deriving.strong_type_of_type typ in
   sanitize ~quoter (desu_expr_of_typ ~quoter ~path:[] typ)
 
-let convert_args f ~ctxt x strict meta exn =
-  let is_strict = match strict with
-    | Some strict -> strict
-    | None -> true (* by default *)
+let make_gen f =
+  let f' ~ctxt x strict meta exn =
+    let is_strict = match strict with
+      | Some strict -> strict
+      | None -> true (* by default *)
+    in
+    let want_meta = match meta with
+      | Some meta -> meta
+      | None -> false (* by default *)
+    in
+    let want_exn = match exn with
+      | Some exn -> exn
+      | None -> false (* by default *)
+    in
+    let options = { is_strict; want_meta; want_exn } in
+    let path =
+      let code_path = Expansion_context.Deriver.code_path ctxt in
+      Code_path.(main_module_name code_path :: submodule_path code_path)
+    in
+    f ~options ~path x
   in
-  let want_meta = match meta with
-    | Some meta -> meta
-    | None -> false (* by default *)
-  in
-  let want_exn = match exn with
-    | Some exn -> exn
-    | None -> false (* by default *)
-  in
-  let options = { is_strict; want_meta; want_exn } in
-  let path =
-    let code_path = Expansion_context.Deriver.code_path ctxt in
-    Code_path.(main_module_name code_path :: submodule_path code_path)
-  in
-  f ~options ~path x
+  Deriving.Generator.V2.make (args ()) f'
 
 let _to_deriving: Deriving.t =
   Deriving.add
     "to_yojson"
     ~extension:(fun ~loc:_ ~path:_ -> ser_core_expr_of_typ)
-    ~str_type_decl:(Deriving.Generator.V2.make (args ()) (convert_args (fun ~options ~path (_, type_decls) ->
+    ~str_type_decl:(make_gen (fun ~options ~path (_, type_decls) ->
         structure (on_str_decls str_of_type_to_yojson) ~options ~path type_decls
-      )))
-    ~sig_type_decl:(Deriving.Generator.V2.make (args ()) (convert_args (fun ~options ~path (_, type_decls) ->
+      ))
+    ~sig_type_decl:(make_gen (fun ~options ~path (_, type_decls) ->
         on_sig_decls sig_of_type_to_yojson ~options ~path type_decls
-      )))
-    ~str_type_ext:(Deriving.Generator.V2.make (args ()) (convert_args ser_str_of_type_ext))
-    ~sig_type_ext:(Deriving.Generator.V2.make (args ()) (convert_args ser_sig_of_type_ext))
+      ))
+    ~str_type_ext:(make_gen ser_str_of_type_ext)
+    ~sig_type_ext:(make_gen ser_sig_of_type_ext)
 
 let _of_deriving: Deriving.t =
   Deriving.add
     "of_yojson"
     ~extension:(fun ~loc:_ ~path:_ -> desu_core_expr_of_typ)
-    ~str_type_decl:(Deriving.Generator.V2.make (args ()) (convert_args (fun ~options ~path (_, type_decls) ->
+    ~str_type_decl:(make_gen (fun ~options ~path (_, type_decls) ->
         structure (on_str_decls str_of_type_of_yojson) ~options ~path type_decls
-      )))
-    ~sig_type_decl:(Deriving.Generator.V2.make (args ()) (convert_args (fun ~options ~path (_, type_decls) ->
+      ))
+    ~sig_type_decl:(make_gen (fun ~options ~path (_, type_decls) ->
         on_sig_decls sig_of_type_of_yojson ~options ~path type_decls
-      )))
-    ~str_type_ext:(Deriving.Generator.V2.make (args ()) (convert_args desu_str_of_type_ext))
-    ~sig_type_ext:(Deriving.Generator.V2.make (args ()) (convert_args desu_sig_of_type_ext))
+      ))
+    ~str_type_ext:(make_gen desu_str_of_type_ext)
+    ~sig_type_ext:(make_gen desu_sig_of_type_ext)
 
 (* Not just alias because yojson also has meta (without its own deriver name) *)
 let _deriving: Deriving.t =
   Deriving.add
     "yojson"
-    ~str_type_decl:(Deriving.Generator.V2.make (args ()) (convert_args (fun ~options ~path (_, type_decls) ->
+    ~str_type_decl:(make_gen (fun ~options ~path (_, type_decls) ->
         structure (on_str_decls str_of_type) ~options ~path type_decls
-      )))
-    ~sig_type_decl:(Deriving.Generator.V2.make (args ()) (convert_args (fun ~options ~path (_, type_decls) ->
+      ))
+    ~sig_type_decl:(make_gen (fun ~options ~path (_, type_decls) ->
         on_sig_decls sig_of_type ~options ~path type_decls
-      )))
-    ~str_type_ext:(Deriving.Generator.V2.make (args ()) (convert_args str_of_type_ext))
-    ~sig_type_ext:(Deriving.Generator.V2.make (args ()) (convert_args sig_of_type_ext))
+      ))
+    ~str_type_ext:(make_gen str_of_type_ext)
+    ~sig_type_ext:(make_gen sig_of_type_ext)
