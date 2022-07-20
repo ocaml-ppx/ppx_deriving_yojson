@@ -894,7 +894,20 @@ let make_gen f =
     let options = { is_strict; want_meta; want_exn } in
     let path =
       let code_path = Expansion_context.Deriver.code_path ctxt in
-      Code_path.(main_module_name code_path :: submodule_path code_path)
+      (* Cannot use main_module_name from code_path because that contains .cppo suffix (via line directives), so it's actually not the module name. *)
+      (* Ppx_deriving.module_from_input_name ported to ppxlib. *)
+      let main_module_path = match Expansion_context.Deriver.input_name ctxt with
+        | ""
+        | "_none_" -> []
+        | input_name ->
+          match Filename.chop_suffix input_name ".ml" with
+          | exception _ ->
+            (* see https://github.com/ocaml-ppx/ppx_deriving/pull/196 *)
+            []
+          | path ->
+            [String.capitalize_ascii (Filename.basename path)]
+      in
+      main_module_path @ Code_path.submodule_path code_path
     in
     f ~options ~path x
   in
