@@ -1,6 +1,21 @@
+3.7.0
+-----
+
+  * Use ounit2 instead of ounit for the tests
+    (#144)
+    Marek Kubica
+  * Update to ppxlib >= 0.26.0
+    (#142, #146)
+    Sonja Heinze, Antonio Nuno Monteiro
+  * Sanitize the ppx output to be able to use module names shadowing the modules from the standard library
+    (#140)
+    Simmo Saan
   * Reimplement map_bind to avoid stack overflows on js-of-ocaml
     (#138)
     P. Baudin
+  * Add ppxlib as a direct dependency for ppx_deriving_yojson
+    (#136)
+    Hongchang Wu
 
 3.6.1
 -----
