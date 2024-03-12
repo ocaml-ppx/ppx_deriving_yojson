@@ -1,8 +1,10 @@
 (executable
  (name test_ppx_yojson)
- (libraries ounit2 result)
- (preprocess (pps ppx_deriving.show ppx_deriving_yojson))
- (flags (:standard -w -9-39-27-34-37)))
+ (libraries ounit2)
+ (preprocess
+  (pps ppx_deriving.show ppx_deriving_yojson))
+ (flags
+  (:standard -w -9-39-27-34-37)))
 
 (alias
  (name runtest)
