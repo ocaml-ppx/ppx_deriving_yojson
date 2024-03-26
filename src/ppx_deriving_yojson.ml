@@ -60,22 +60,21 @@ type options = {
   want_exn : bool;
 }
 
+let default_options = {
+  is_strict = true;
+  want_meta = false;
+  want_exn = false;
+}
+
 let parse_options options =
-  let strict = ref true in
-  let meta = ref false in
-  let exn = ref false in
   let get_bool = Ppx_deriving.Arg.(get_expr ~deriver bool) in
-  options |> List.iter (fun (name, expr) ->
+  options |> List.fold_left (fun options (name, expr) ->
     match name with
-    | "strict" -> strict := get_bool expr
-    | "meta" -> meta := get_bool expr
-    | "exn" -> exn := get_bool expr
-    | _ -> raise_errorf ~loc:expr.pexp_loc "%s does not support option %s" deriver name);
-  {
-    is_strict = !strict;
-    want_meta = !meta;
-    want_exn = !exn;
-  }
+    | "strict" -> {options with is_strict = get_bool expr}
+    | "meta" -> {options with want_meta = get_bool expr}
+    | "exn" -> {options with want_exn = get_bool expr}
+    | _ -> raise_errorf ~loc:expr.pexp_loc "%s does not support option %s" deriver name
+  ) default_options
 
 let poly_fun names expr =
   List.fold_right (fun name expr ->
