@@ -54,13 +54,49 @@ let get_label_attribute (label_attr, ct_attr) label =
   | Some _ as v -> v
   | None -> Attribute.get ct_attr label.pld_type
 
+type variants =
+  [ `Array
+  | `External
+  | `Internal of string
+  | `Adjacent of string * string ]
+
+let variants_conv _ loc expr f =
+  match expr with
+  | { pexp_desc = Pexp_variant ("Array", None) } -> f `Array
+  | { pexp_desc = Pexp_variant ("External", None) } -> f `External
+  | { pexp_desc = Pexp_variant ("Internal", Some t_expr) } ->
+    (match Ppx_deriving.Arg.string t_expr with
+    | Ok t -> f (`Internal t)
+    | Error e -> raise (Ppxlib__.Ast_pattern0.Expected (loc, "in `Internal _: " ^ e)))
+  | { pexp_desc = Pexp_variant ("Adjacent", Some { pexp_desc = Pexp_tuple [t_expr; c_expr] }) } ->
+    (match Ppx_deriving.Arg.string t_expr, Ppx_deriving.Arg.string c_expr with
+    | Ok t, Ok c -> f (`Adjacent (t, c))
+    | Error e, _ -> raise (Ppxlib__.Ast_pattern0.Expected (loc, "in `Adjacent (_, _): " ^ e))
+    | _, Error e -> raise (Ppxlib__.Ast_pattern0.Expected (loc, "in `Adjacent (_, _): " ^ e)))
+  | _ -> raise (Ppxlib__.Ast_pattern0.Expected (loc, Printf.sprintf "one of: `Array, `External, `Internal _, `Adjacent (_, _)"))
+
 type options = {
-  is_strict: bool;
-  want_meta: bool;
-  want_exn: bool;
+  is_strict : bool;
+  want_meta : bool;
+  want_exn : bool;
+  variants : variants;
 }
 
-let args () = Deriving.Args.(empty +> arg "strict" (ebool __) +> arg "meta" (ebool __) +> arg "exn" (ebool __))
+let default_options = {
+  is_strict = true;
+  want_meta = false;
+  want_exn = false;
+  variants = `Array;
+}
+
+let args () =
+  Deriving.Args.(
+    empty +>
+    arg "strict" (ebool __) +>
+    arg "meta" (ebool __) +>
+    arg "exn" (ebool __) +>
+    arg "variants" (of_func variants_conv)
+  )
 
 let poly_fun names expr =
   List.fold_right (fun name expr ->
@@ -72,16 +108,37 @@ let poly_fun names expr =
 let type_add_attrs typ attributes =
   { typ with ptyp_attributes = typ.ptyp_attributes @ attributes }
 
-let rec ser_expr_of_typ ~quoter typ =
+let ser_expr_body_of_empty_constructor ~options ~loc ~json_name =
+  match options.variants with
+  | `Array -> [%expr `List [`String [%e str json_name]]]
+  | `External -> [%expr `String [%e str json_name]]
+  | `Internal t -> [%expr `Assoc [([%e str t], `String [%e str json_name])]]
+  | `Adjacent (t, _c) -> [%expr `Assoc [([%e str t], `String [%e str json_name])]]
+
+let ser_expr_body_of_tuple_constructor ~options ~loc ~json_name ~arg_exprs =
+  match options.variants with
+  | `Array -> [%expr `List (`String [%e str json_name] :: [%e list arg_exprs])]
+  | `External ->
+    (match arg_exprs with
+    | [arg_expr] -> [%expr `Assoc [([%e str json_name], [%e arg_expr])]]
+    | _ -> [%expr `Assoc [([%e str json_name], `List [%e list arg_exprs])]])
+  | `Internal _t ->
+    raise_errorf ~loc "%s: `Internal _ variant representation cannot be used with tuple variants" deriver
+  | `Adjacent (t, c) ->
+    (match arg_exprs with
+    | [arg_expr] -> [%expr `Assoc [([%e str t], `String [%e str json_name]); ([%e str c], [%e arg_expr])]]
+    | _ -> [%expr `Assoc [([%e str t], `String [%e str json_name]); ([%e str c], `List [%e list arg_exprs])]])
+
+let rec ser_expr_of_typ ~options ~quoter typ =
   match Attribute.get ct_attr_ser typ with
     | Some e -> Ppx_deriving.quote ~quoter e
-    | None -> ser_expr_of_only_typ ~quoter typ
-and ser_expr_of_only_typ ~quoter typ =
+    | None -> ser_expr_of_only_typ ~options ~quoter typ
+and ser_expr_of_only_typ ~options ~quoter typ =
   let loc = typ.ptyp_loc in
   let attr_int_encoding typ =
     match Attribute.get ct_attr_int_encoding typ with Some `String -> "String" | Some `Int | None -> "Intlit"
   in
-  let ser_expr_of_typ = ser_expr_of_typ ~quoter in
+  let ser_expr_of_typ = ser_expr_of_typ ~options ~quoter in
   match typ with
   | [%type: unit]            -> [%expr fun (x:Ppx_deriving_runtime.unit) -> `Null]
   | [%type: int]             -> [%expr fun (x:Ppx_deriving_runtime.int) -> `Int x]
@@ -122,22 +179,21 @@ and ser_expr_of_only_typ ~quoter typ =
         match field.prf_desc with
         | Rtag(label, true (*empty*), []) ->
           let label = label.txt in
-          let name = match Attribute.get rtag_attr_name field with Some s -> s | None -> label in
+          let json_name = match Attribute.get rtag_attr_name field with Some s -> s | None -> label in
           Exp.case (Pat.variant label None)
-                   [%expr `List [`String [%e str name]]]
+                   (ser_expr_body_of_empty_constructor ~options ~loc ~json_name)
         | Rtag(label, false, [{ ptyp_desc = Ptyp_tuple typs }]) ->
           let label = label.txt in
-          let name = match Attribute.get rtag_attr_name field with Some s -> s | None -> label in
+          let json_name = match Attribute.get rtag_attr_name field with Some s -> s | None -> label in
+          let arg_exprs = List.mapi (fun i typ -> app (ser_expr_of_typ typ) [evar (argn i)]) typs in
           Exp.case (Pat.variant label (Some (ptuple (List.mapi (fun i _ -> pvar (argn i)) typs))))
-                   [%expr `List ((`String [%e str name]) :: [%e
-                      list (List.mapi
-                        (fun i typ -> app (ser_expr_of_typ typ) [evar (argn i)]) typs)])]
+                   (ser_expr_body_of_tuple_constructor ~options ~loc ~json_name ~arg_exprs)
         | Rtag(label, false, [typ]) ->
           let label = label.txt in
-          let name = match Attribute.get rtag_attr_name field with Some s -> s | None -> label in
+          let json_name = match Attribute.get rtag_attr_name field with Some s -> s | None -> label in
+          let arg_exprs = [[%expr [%e ser_expr_of_typ typ] x]] in
           Exp.case (Pat.variant label (Some [%pat? x]))
-                   [%expr `List [`String [%e str name];
-                                 [%e ser_expr_of_typ typ] x]]
+                   (ser_expr_body_of_tuple_constructor ~options ~loc ~json_name ~arg_exprs)
         | Rinherit ({ ptyp_desc = Ptyp_constr (tname, _) } as typ) ->
           Exp.case [%pat? [%p Pat.type_ tname] as x]
                    [%expr [%e ser_expr_of_typ typ] x]
@@ -155,19 +211,40 @@ and ser_expr_of_only_typ ~quoter typ =
     raise_errorf ~loc:ptyp_loc "%s cannot be derived for %s"
                  deriver (Ppx_deriving.string_of_core_type typ)
 
+let desu_pat_body_of_empty_constructor ~options ~loc ~json_name =
+  match options.variants with
+  | `Array -> [%pat? `List [`String [%p pstr json_name]]]
+  | `External -> [%pat? `String [%p pstr json_name]]
+  | `Internal t -> [%pat? `Assoc [([%p pstr t], `String [%p pstr json_name])]]
+  | `Adjacent (t, _c) -> [%pat? `Assoc [([%p pstr t], `String [%p pstr json_name])]]
+
+let desu_pat_body_of_tuple_constructor ~options ~loc ~json_name ~arg_pats =
+  match options.variants with
+  | `Array -> [%pat? `List (`String [%p pstr json_name] :: [%p plist arg_pats])]
+  | `External ->
+    (match arg_pats with
+    | [arg_pat] -> [%pat? `Assoc [([%p pstr json_name], [%p arg_pat])]]
+    | _ -> [%pat? `Assoc [([%p pstr json_name], `List [%p plist arg_pats])]])
+  | `Internal _t ->
+    raise_errorf ~loc "%s: `Internal _ variant representation cannot be used with tuple variants" deriver
+  | `Adjacent (t, c) ->
+    (match arg_pats with
+    | [arg_pat] -> [%pat? `Assoc [([%p pstr t], `String [%p pstr json_name]); ([%p pstr c], [%p arg_pat])]]
+    | _ -> [%pat? `Assoc [([%p pstr t], `String [%p pstr json_name]); ([%p pstr c], `List [%p plist arg_pats])]])
+
 (* http://desuchan.net/desu/src/1284751839295.jpg *)
-let rec desu_fold ~quoter ~loc ~path f typs =
+let rec desu_fold ~options ~quoter ~loc ~path f typs =
   typs |>
-  List.mapi (fun i typ -> i, app (desu_expr_of_typ ~quoter ~path typ) [evar (argn i)]) |>
+  List.mapi (fun i typ -> i, app (desu_expr_of_typ ~options ~quoter ~path typ) [evar (argn i)]) |>
   List.fold_left (fun x (i, y) ->
     let loc = x.pexp_loc in
     [%expr [%e y] >>= fun [%p pvar (argn i)] -> [%e x]])
     [%expr Ok [%e f (List.mapi (fun i _ -> evar (argn i)) typs)]]
-and desu_expr_of_typ ~quoter ~path typ =
+and desu_expr_of_typ ~options ~quoter ~path typ =
   match Attribute.get ct_attr_desu typ with
     | Some e -> Ppx_deriving.quote ~quoter e
-    | None -> desu_expr_of_only_typ ~quoter ~path typ
-and desu_expr_of_only_typ ~quoter ~path typ =
+    | None -> desu_expr_of_only_typ ~options ~quoter ~path typ
+and desu_expr_of_only_typ ~options ~quoter ~path typ =
   let loc = typ.ptyp_loc in
   let error = [%expr Error [%e str (String.concat "." path)]] in
   let decode' cases =
@@ -176,7 +253,7 @@ and desu_expr_of_only_typ ~quoter ~path typ =
       [Exp.case [%pat? _] error])
   in
   let decode pat exp = decode' [pat, exp] in
-  let desu_expr_of_typ = desu_expr_of_typ ~quoter in
+  let desu_expr_of_typ = desu_expr_of_typ ~options ~quoter in
   match typ with
   | [%type: unit]   -> decode [%pat? `Null] [%expr Ok ()]
   | [%type: int]    -> decode [%pat? `Int x]    [%expr Ok x]
@@ -224,7 +301,7 @@ and desu_expr_of_only_typ ~quoter ~path typ =
   | [%type: Yojson.Safe.json] -> [%expr fun x -> Ok x]
   | { ptyp_desc = Ptyp_tuple typs } ->
     decode [%pat? `List [%p plist (List.mapi (fun i _ -> pvar (argn i)) typs)]]
-           (desu_fold ~quoter ~loc ~path tuple typs)
+           (desu_fold ~options ~quoter ~loc ~path tuple typs)
   | { ptyp_desc = Ptyp_variant (fields, _, _); ptyp_loc } ->
     let inherits, tags = List.partition (fun field ->
       match field.prf_desc with
@@ -235,19 +312,20 @@ and desu_expr_of_only_typ ~quoter ~path typ =
       match field.prf_desc with
       | Rtag(label, true (*empty*), []) ->
         let label = label.txt in
-        let name = match Attribute.get rtag_attr_name field with Some s -> s | None -> label in
-        Exp.case [%pat? `List [`String [%p pstr name]]]
+        let json_name = match Attribute.get rtag_attr_name field with Some s -> s | None -> label in
+        Exp.case (desu_pat_body_of_empty_constructor ~options ~loc ~json_name)
                  [%expr Ok [%e Exp.variant label None]]
       | Rtag(label, false, [{ ptyp_desc = Ptyp_tuple typs }]) ->
         let label = label.txt in
-        let name = match Attribute.get rtag_attr_name field with Some s -> s | None -> label in
-        Exp.case [%pat? `List ((`String [%p pstr name]) :: [%p
-                    plist (List.mapi (fun i _ -> pvar (argn i)) typs)])]
-                 (desu_fold ~quoter ~loc ~path (fun x -> (Exp.variant label (Some (tuple x)))) typs)
+        let json_name = match Attribute.get rtag_attr_name field with Some s -> s | None -> label in
+        let arg_pats = List.mapi (fun i _ -> pvar (argn i)) typs in
+        Exp.case (desu_pat_body_of_tuple_constructor ~options ~loc ~json_name ~arg_pats)
+                 (desu_fold ~options ~quoter ~loc ~path (fun x -> (Exp.variant label (Some (tuple x)))) typs)
       | Rtag(label, false, [typ]) ->
         let label = label.txt in
-        let name = match Attribute.get rtag_attr_name field with Some s -> s | None -> label in
-        Exp.case [%pat? `List [`String [%p pstr name]; x]]
+        let json_name = match Attribute.get rtag_attr_name field with Some s -> s | None -> label in
+        let arg_pats = [[%pat? x]] in
+        Exp.case (desu_pat_body_of_tuple_constructor ~options ~loc ~json_name ~arg_pats)
                  [%expr [%e desu_expr_of_typ ~path typ] x >>= fun x ->
                         Ok [%e Exp.variant label (Some [%expr x])]]
       | Rinherit ({ ptyp_desc = Ptyp_constr (tname, _) } as typ) ->
@@ -296,13 +374,13 @@ let ser_type_of_decl ~options:_ ~path:_ type_decl =
                        (fun var -> [%type: [%t var] -> Yojson.Safe.t]) type_decl in
   polymorphize [%type: [%t typ] -> Yojson.Safe.t]
 
-let ser_str_of_record ~quoter ~loc varname labels =
+let ser_str_of_record ~options ~quoter ~loc ?(initial_fields = [%expr []]) varname labels =
   let fields =
     labels |> List.mapi (fun _i ({ pld_loc = loc; pld_name = { txt = name }; pld_type; pld_attributes } as label) ->
       let field  = Exp.field (evar varname) (mknoloc (Lident name)) in
       let key = match Attribute.get label_attr_key label with Some s -> s | None -> name in
       let result = [%expr [%e str key],
-                    [%e ser_expr_of_typ ~quoter @@ type_add_attrs pld_type pld_attributes] [%e field]] in
+                    [%e ser_expr_of_typ ~options ~quoter @@ type_add_attrs pld_type pld_attributes] [%e field]] in
       match get_label_attribute attr_default label with
       | None ->
           [%expr [%e result] :: fields]
@@ -315,9 +393,35 @@ let ser_str_of_record ~quoter ~loc varname labels =
       (fun expr field ->
         let loc = expr.pexp_loc in
         [%expr let fields = [%e field] in [%e expr]])
-      [%expr `Assoc fields] fields
+      [%expr `Assoc ([%e initial_fields] @ fields)] fields
   in
   [%expr let fields = [] in [%e assoc]]
+
+let ser_str_of_constructor ~options ~quoter ~loc ~name ~args ~json_name =
+  match args with
+  | Pcstr_tuple [] ->
+    Exp.case
+      (pconstr name [])
+      (ser_expr_body_of_empty_constructor ~options ~loc ~json_name)
+  | Pcstr_tuple args ->
+    let arg_exprs = List.mapi (fun i typ -> app (ser_expr_of_typ ~options ~quoter typ) [evar (argn i)]) args in
+    Exp.case
+      (pconstr name (List.mapi (fun i _ -> pvar (argn i)) args))
+      (ser_expr_body_of_tuple_constructor ~options ~loc ~json_name ~arg_exprs)
+  | Pcstr_record labels ->
+    let arg_expr =
+      match options.variants with
+      | `Internal t ->
+        ser_str_of_record ~options ~quoter ~loc ~initial_fields:[%expr [([%e str t], `String [%e str json_name])]] (argn 0) labels
+      | _ ->
+        ser_str_of_record ~options ~quoter ~loc (argn 0) labels in
+    Exp.case
+      (pconstr name [pvar(argn 0)])
+      (match options.variants with
+      | `Array -> [%expr `List [`String [%e str json_name]; [%e arg_expr]]]
+      | `External -> [%expr `Assoc [([%e str json_name], [%e arg_expr])]]
+      | `Internal _t -> arg_expr
+      | `Adjacent (t, c) -> [%expr `Assoc [([%e str t], `String [%e str json_name]); ([%e str c], [%e arg_expr])]])
 
 let ser_str_of_type ~options ~path ({ ptype_loc = loc } as type_decl) =
   let quoter = Ppx_deriving.create_quoter () in
@@ -331,7 +435,7 @@ let ser_str_of_type ~options ~path ({ ptype_loc = loc } as type_decl) =
     in
     match type_decl.ptype_manifest with
     | Some ({ ptyp_desc = Ptyp_constr ({ txt = lid }, _args) } as manifest) ->
-      let ser = ser_expr_of_typ ~quoter manifest in
+      let ser = ser_expr_of_typ ~options ~quoter manifest in
       let lid = Ppx_deriving.mangle_lid (`PrefixSuffix ("M", "to_yojson")) lid in
       let orig_mod = Mod.ident (mknoloc lid) in
       let poly_ser = polymorphize [%expr ([%e sanitize ~quoter ser] : [%t typ] -> Yojson.Safe.t)] in
@@ -384,32 +488,16 @@ let ser_str_of_type ~options ~path ({ ptype_loc = loc } as type_decl) =
     let serializer =
       match kind, type_decl.ptype_manifest with
       | Ptype_open, _ -> assert false
-      | Ptype_abstract, Some manifest -> ser_expr_of_typ ~quoter manifest
+      | Ptype_abstract, Some manifest -> ser_expr_of_typ ~options ~quoter manifest
       | Ptype_variant constrs, _ ->
         constrs
-        |> List.map (fun ({ pcd_name = { txt = name' }; pcd_args; _ } as constr) ->
-          let json_name = match Attribute.get constr_attr_name constr with Some s -> s | None -> name' in
-          match pcd_args with
-          | Pcstr_tuple([]) ->
-            Exp.case
-              (pconstr name' [])
-              [%expr `List [`String [%e str json_name]]]
-          | Pcstr_tuple(args) ->
-            let arg_exprs =
-              List.mapi (fun i typ -> app (ser_expr_of_typ ~quoter typ) [evar (argn i)]) args
-            in
-            Exp.case
-              (pconstr name' (List.mapi (fun i _ -> pvar (argn i)) args))
-              [%expr `List ((`String [%e str json_name]) :: [%e list arg_exprs])]
-          | Pcstr_record labels ->
-            let arg_expr = ser_str_of_record ~quoter ~loc (argn 0) labels in
-            Exp.case
-              (pconstr name' [pvar(argn 0)])
-              [%expr `List ((`String [%e str json_name]) :: [%e list[arg_expr]])]
+        |> List.map (fun ({ pcd_name = { txt = name }; pcd_args; _ } as constr) ->
+          let json_name = match Attribute.get constr_attr_name constr with Some s -> s | None -> name in
+          ser_str_of_constructor ~options ~quoter ~loc ~name ~args:pcd_args ~json_name
           )
         |> Exp.function_
       | Ptype_record labels, _ ->
-        [%expr fun x -> [%e ser_str_of_record ~quoter ~loc "x" labels]]
+        [%expr fun x -> [%e ser_str_of_record ~options ~quoter ~loc "x" labels]]
       | Ptype_abstract, None ->
         raise_errorf ~loc "%s cannot be derived for fully abstract types" deriver
     in
@@ -426,34 +514,19 @@ let ser_str_of_type ~options ~path ({ ptype_loc = loc } as type_decl) =
      [Str.value Nonrecursive [Vb.mk (pvar "_") [%expr [%e evar var_s]]] ]
      )
 
-let ser_str_of_type_ext ~options:_ ~path:_ ({ ptyext_path = { loc }} as type_ext) =
+let ser_str_of_type_ext ~options ~path:_ ({ ptyext_path = { loc }} as type_ext) =
   let quoter = Ppx_deriving.create_quoter () in
   let serializer =
     let pats =
-      List.fold_right (fun ({ pext_name = { txt = name' }; pext_kind; _ } as ext) acc_cases ->
+      List.fold_right (fun ({ pext_name = { txt = name }; pext_kind; _ } as ext) acc_cases ->
         match pext_kind with
         | Pext_rebind _ ->
           (* nothing to do, since the constructor must be handled in original
              constructor declaration *)
           acc_cases
         | Pext_decl (_, pext_args, _) ->
-          let json_name = match Attribute.get ext_attr_name ext with Some s -> s | None -> name' in
-          let case =
-            match pext_args with
-            | Pcstr_tuple([]) ->
-              Exp.case
-                (pconstr name' [])
-                [%expr `List [`String [%e str json_name]]]
-            | Pcstr_tuple(args) ->
-              let arg_exprs =
-                List.mapi (fun i typ -> app (ser_expr_of_typ ~quoter typ) [evar (argn i)]) args
-              in
-              Exp.case
-                (pconstr name' (List.mapi (fun i _ -> pvar (argn i)) args))
-                [%expr `List ((`String [%e str json_name]) :: [%e list arg_exprs])]
-            | Pcstr_record _ ->
-              raise_errorf ~loc "%s: record variants are not supported in extensible types" deriver
-          in
+          let json_name = match Attribute.get ext_attr_name ext with Some s -> s | None -> name in
+          let case = ser_str_of_constructor ~options ~quoter ~loc ~name ~args:pext_args ~json_name in
           case :: acc_cases) type_ext.ptyext_constructors []
     in
     let fallback_case =
@@ -492,9 +565,10 @@ let desu_type_of_decl ~options ~path type_decl =
   let typ = Ppx_deriving.core_type_of_type_decl type_decl in
   desu_type_of_decl_poly ~options ~path type_decl [%type: Yojson.Safe.t -> [%t error_or typ]]
 
+let error ~loc path = [%expr Error [%e str (String.concat "." path)]]
 
-let desu_str_of_record ~quoter ~loc ~is_strict ~error ~path wrap_record labels =
-  let top_error = error path in
+let desu_str_of_record ~options ~quoter ~loc ~path ?(ignore_keys = []) wrap_record labels =
+  let top_error = error ~loc path in
   let record =
     List.fold_left
       (fun expr i ->
@@ -508,23 +582,26 @@ let desu_str_of_record ~quoter ~loc ~is_strict ~error ~path wrap_record labels =
             None in
         [%expr Ok [%e wrap_record r] ] )
       (labels |> List.mapi (fun i _ -> i)) in
-  let default_case = if is_strict then top_error else [%expr loop xs _state] in
+  let default_case = if options.is_strict then top_error else [%expr loop xs state] in
   let cases =
     (labels |> List.mapi (fun i ({ pld_loc = loc; pld_name = { txt = name }; pld_type; pld_attributes } as label) ->
         let path = path @ [name] in
         let thunks = labels |> List.mapi (fun j _ ->
              if i = j
-             then app (desu_expr_of_typ ~quoter ~path @@ type_add_attrs pld_type pld_attributes) [evar "x"]
+             then app (desu_expr_of_typ ~options ~quoter ~path @@ type_add_attrs pld_type pld_attributes) [evar "x"]
              else evar (argn j)) in
         let key = match Attribute.get label_attr_key label with Some s -> s | None -> name in
         Exp.case [%pat? ([%p pstr key], x) :: xs]
           [%expr loop xs [%e tuple thunks]])) @
+    (ignore_keys |> List.map (fun key ->
+      Exp.case [%pat? ([%p pstr key], _) :: xs] [%expr loop xs state])
+    ) @
     [Exp.case [%pat? []] record;
      Exp.case [%pat? _ :: xs] default_case]
   and thunks =
     labels |> List.map (fun ({ pld_name = { txt = name }; pld_type; _ } as label) ->
       match get_label_attribute attr_default label with
-      | None   -> error (path @ [name])
+      | None   -> error ~loc (path @ [name])
       | Some default ->
         let default = [%expr ([%e default] : [%t pld_type])] in
         [%expr Ok [%e Ppx_deriving.quote ~quoter default]])
@@ -532,20 +609,64 @@ let desu_str_of_record ~quoter ~loc ~is_strict ~error ~path wrap_record labels =
   [%expr
     function
     | `Assoc xs ->
-      let rec loop xs ([%p ptuple (List.mapi (fun i _ -> pvar (argn i)) labels)] as _state) =
+      let rec loop xs ([%p ptuple (List.mapi (fun i _ -> pvar (argn i)) labels)] as state) =
         [%e Exp.match_ [%expr xs] cases]
       in loop xs [%e tuple thunks]
     | _ -> [%e top_error]]
 
 
+let desu_str_of_constructor ~options ~quoter ~loc ~path ~typ_any ~name ~args ~json_name =
+  let mk_constr l =
+    (* https://github.com/ocaml-ppx/ppx_deriving_yojson/issues/163 *)
+    Ast_builder.Default.pexp_constraint ~loc (constr name l) typ_any in
+  match args with
+  | Pcstr_tuple [] ->
+    Exp.case
+      (desu_pat_body_of_empty_constructor ~options ~loc ~json_name)
+      [%expr Ok [%e mk_constr []]]
+  | Pcstr_tuple args ->
+    let arg_pats = (List.mapi (fun i _ -> pvar (argn i)) args) in
+    Exp.case
+      (desu_pat_body_of_tuple_constructor ~options ~loc ~json_name ~arg_pats)
+      (desu_fold ~options ~quoter ~loc ~path mk_constr args)
+  | Pcstr_record labels ->
+    let wrap_record r = mk_constr [r] in
+    let sub =
+      match options.variants with
+      | `Internal t -> desu_str_of_record ~options ~quoter ~loc ~path ~ignore_keys:[t] wrap_record labels
+      | _ -> desu_str_of_record ~options ~quoter ~loc ~path wrap_record labels in
+    let arg_pat = pvar (argn 0) in
+    let guard =
+      match options.variants with
+      | `Internal t ->
+        Some [%expr
+          x |> List.exists (function
+            | ([%p pstr t], `String [%p pstr json_name]) -> true
+            | _ -> false
+          )
+        ]
+      | _ -> None in
+    Exp.case
+      (match options.variants with
+      | `Array -> [%pat? `List [`String [%p pstr json_name]; [%p arg_pat]]]
+      | `External -> [%pat? `Assoc [([%p pstr json_name], [%p arg_pat])]]
+      | `Internal _t -> Ast_builder.Default.ppat_alias ~loc [%pat? `Assoc x] { txt = argn 0; loc }
+      | `Adjacent (t, c) -> [%pat? `Assoc [([%p pstr t], `String [%p pstr json_name]); ([%p pstr c], [%p arg_pat])]])
+      ?guard
+      [%expr [%e sub] [%e evar (argn 0)]]
+
 let desu_str_of_type ~options ~path ({ ptype_loc = loc } as type_decl) =
-  let { is_strict; want_exn; _ } = options in
+  let { want_exn; _ } = options in
   let quoter = Ppx_deriving.create_quoter () in
   let path = path @ [type_decl.ptype_name.txt] in
   let error path = [%expr Error [%e str (String.concat "." path)]] in
   let top_error = error path in
   let polymorphize = Ppx_deriving.poly_fun_of_type_decl type_decl in
   let typ = Ppx_deriving.core_type_of_type_decl type_decl in
+  let typ_any =
+    Ast_builder.Default.ptyp_constr ~loc
+      (Ast_builder.Default.Located.map lident type_decl.ptype_name)
+      (type_decl.ptype_params |> List.map (fun _ -> [%type: _])) in
   match type_decl.ptype_kind with
   | Ptype_open -> begin
     let of_yojson_name = Ppx_deriving.mangle_type_decl (`Suffix "of_yojson") type_decl in
@@ -554,7 +675,7 @@ let desu_str_of_type ~options ~path ({ ptype_loc = loc } as type_decl) =
     in
     match type_decl.ptype_manifest with
     | Some ({ ptyp_desc = Ptyp_constr ({ txt = lid }, _args) } as manifest) ->
-      let desu = desu_expr_of_typ ~quoter ~path manifest in
+      let desu = desu_expr_of_typ ~options ~quoter ~path manifest in
       let lid = Ppx_deriving.mangle_lid (`PrefixSuffix ("M", "of_yojson")) lid in
       let orig_mod = Mod.ident (mknoloc lid) in
       let poly_desu = polymorphize [%expr ([%e sanitize ~quoter desu] : Yojson.Safe.t -> _)] in
@@ -600,39 +721,17 @@ let desu_str_of_type ~options ~path ({ ptype_loc = loc } as type_decl) =
       match kind, type_decl.ptype_manifest with
       | Ptype_open, _ -> assert false
       | Ptype_abstract, Some manifest ->
-        desu_expr_of_typ ~quoter ~path manifest
+        desu_expr_of_typ ~options ~quoter ~path manifest
       | Ptype_variant constrs, _ ->
-        let cases = List.map (fun ({ pcd_loc = loc; pcd_name = { txt = name' }; pcd_args; _ } as constr') ->
-          match pcd_args with
-          | Pcstr_tuple(args) ->
-            let name = match Attribute.get constr_attr_name constr' with Some s -> s | None -> name' in
-            Exp.case
-              [%pat? `List ((`String [%p pstr name]) ::
-                                     [%p plist (List.mapi (fun i _ -> pvar (argn i)) args)])]
-              (desu_fold ~quoter ~loc ~path
-                 (fun x ->
-                    (* https://github.com/ocaml-ppx/ppx_deriving_yojson/issues/163 *)
-                    let typ = Ppx_deriving.core_type_of_type_decl type_decl in
-                    Exp.constraint_ (constr name' x) typ)
-                 args)
-          | Pcstr_record labels ->
-            let wrap_record r =
-              (* https://github.com/ocaml-ppx/ppx_deriving_yojson/issues/163 *)
-              let typ = Ppx_deriving.core_type_of_type_decl type_decl in
-              Exp.constraint_ (constr name' [r]) typ
-            in
-            let sub =
-              desu_str_of_record ~quoter ~loc ~is_strict ~error ~path wrap_record labels in
-            let name = match Attribute.get constr_attr_name constr' with Some s -> s | None -> name' in
-            Exp.case
-              [%pat? `List ((`String [%p pstr name]) ::
-                              [%p plist [pvar (argn 0)]])]
-              [%expr [%e sub] [%e evar (argn 0)] ]
-          ) constrs
-        in
+        let cases =
+          constrs
+          |> List.map (fun ({ pcd_loc = loc; pcd_name = { txt = name }; pcd_args; _ } as constr') ->
+            let json_name = match Attribute.get constr_attr_name constr' with Some s -> s | None -> name in
+            desu_str_of_constructor ~options ~quoter ~loc ~path ~typ_any ~name ~args:pcd_args ~json_name
+          ) in
         Exp.function_ (cases @ [Exp.case [%pat? _] top_error])
       | Ptype_record labels, _ ->
-        desu_str_of_record ~quoter ~loc ~is_strict ~error ~path (fun r -> r) labels
+        desu_str_of_record ~options ~quoter ~loc ~path (fun r -> r) labels
       | Ptype_abstract, None ->
         raise_errorf ~loc "%s cannot be derived for fully abstract types" deriver
     in
@@ -664,30 +763,25 @@ let desu_str_of_type ~options ~path ({ ptype_loc = loc } as type_decl) =
         ;Str.value Nonrecursive [Vb.mk (pvar "_") [%expr [%e evar var_s_exn]]]])
      )
 
-let desu_str_of_type_ext ~options:_ ~path ({ ptyext_path = { loc } } as type_ext) =
+let desu_str_of_type_ext ~options ~path ({ ptyext_path = { loc } } as type_ext) =
   let quoter = Ppx_deriving.create_quoter () in
+  let typ_any =
+    Ast_builder.Default.ptyp_constr ~loc
+      type_ext.ptyext_path
+      (type_ext.ptyext_params |> List.map (fun _ -> [%type: _])) in
   let desurializer =
     let pats =
-      List.fold_right (fun ({ pext_name = { txt = name' }; pext_kind; _ } as ext) acc_cases ->
+      List.fold_right (fun ({ pext_name = { txt = name }; pext_kind; _ } as ext) acc_cases ->
         match pext_kind with
         | Pext_rebind _ ->
           (* nothing to do since it must have been handled in the original
              constructor declaration *)
           acc_cases
         | Pext_decl (_, pext_args, _) ->
-          let case =
-            match pext_args with
-            | Pcstr_tuple(args) ->
-              let name = match Attribute.get ext_attr_name ext with Some s -> s | None -> name' in
-              Exp.case
-                [%pat? `List ((`String [%p pstr name]) ::
-                                       [%p plist (List.mapi (fun i _ -> pvar (argn i)) args)])]
-                (desu_fold ~quoter ~loc ~path (fun x -> constr name' x) args)
-            | Pcstr_record _ ->
-              raise_errorf ~loc "%s: record variants are not supported in extensible types" deriver
-          in
-          case :: acc_cases)
-        type_ext.ptyext_constructors []
+          let json_name = match Attribute.get ext_attr_name ext with Some s -> s | None -> name in
+          let case = desu_str_of_constructor ~options ~quoter ~loc ~path ~typ_any ~name ~args:pext_args ~json_name in
+          case :: acc_cases
+      ) type_ext.ptyext_constructors []
     in
     let any_case = Exp.case (Pat.var (mknoloc "x"))
       (app (Ppx_deriving.poly_apply_of_type_ext type_ext [%expr fallback])
@@ -892,28 +986,25 @@ let on_sig_decls f ~options ~path type_decls =
 let ser_core_expr_of_typ typ =
   let quoter = Ppx_deriving.create_quoter () in
   let typ = Ppx_deriving.strong_type_of_type typ in
-  sanitize ~quoter (ser_expr_of_typ ~quoter typ)
+  sanitize ~quoter (ser_expr_of_typ ~options:default_options ~quoter typ)
 
 let desu_core_expr_of_typ typ =
   let quoter = Ppx_deriving.create_quoter () in
   let typ = Ppx_deriving.strong_type_of_type typ in
-  sanitize ~quoter (desu_expr_of_typ ~quoter ~path:[] typ)
+  sanitize ~quoter (desu_expr_of_typ ~options:default_options ~quoter ~path:[] typ)
 
 let make_gen f =
-  let f' ~ctxt x strict meta exn =
-    let is_strict = match strict with
-      | Some strict -> strict
-      | None -> true (* by default *)
-    in
-    let want_meta = match meta with
-      | Some meta -> meta
-      | None -> false (* by default *)
-    in
-    let want_exn = match exn with
-      | Some exn -> exn
-      | None -> false (* by default *)
-    in
-    let options = { is_strict; want_meta; want_exn } in
+  let default option value =
+    match option with
+    | Some v -> v
+    | None -> value in
+  let f' ~ctxt x is_strict want_meta want_exn variants =
+    let options = {
+      is_strict = default is_strict default_options.is_strict;
+      want_meta = default want_meta default_options.want_meta;
+      want_exn = default want_exn default_options.want_exn;
+      variants = default variants default_options.variants;
+    } in
     let path =
       let code_path = Expansion_context.Deriver.code_path ctxt in
       (* Cannot use main_module_name from code_path because that contains .cppo suffix (via line directives), so it's actually not the module name. *)

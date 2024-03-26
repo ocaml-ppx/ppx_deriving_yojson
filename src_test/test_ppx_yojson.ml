@@ -47,6 +47,14 @@ type 'a p = 'a option
 [@@deriving show, yojson]
 type pv = [ `A | `B of int | `C of int * string ]
 [@@deriving show, yojson]
+type pv_array = [ `A | `B of int | `C of int * string ]
+[@@deriving show, yojson { variants = `Array }]
+type pv_external = [ `A | `B of int | `C of int * string ]
+[@@deriving show, yojson { variants = `External }]
+type pv_internal = [ `A ]
+[@@deriving show, yojson { variants = `Internal "type" }]
+type pv_adjacent = [ `A | `B of int | `C of int * string ]
+[@@deriving show, yojson { variants = `Adjacent ("tag", "contents") }]
 type pva = [ `A ] and pvb = [ `B ]
 [@@deriving show, yojson]
 type 'a pvc = [ `C of 'a ]
@@ -60,6 +68,14 @@ type r  = { x : int; y : string }
 [@@deriving show, yojson { meta = true }]
 type rv = RA | RB of int | RC of int * string | RD of { z : string }
 [@@deriving show, yojson]
+type rv_array = RA | RB of int | RC of int * string | RD of { z : string }
+[@@deriving show, yojson { variants = `Array }]
+type rv_external = RA | RB of int | RC of int * string | RD of { z : string }
+[@@deriving show, yojson { variants = `External }]
+type rv_internal = RA | RD of { z : string }
+[@@deriving show, yojson { variants = `Internal "type" }]
+type rv_adjacent = RA | RB of int | RC of int * string | RD of { z : string }
+[@@deriving show, yojson { variants = `Adjacent ("tag", "contents") }]
 
 let test_unit _ctxt =
   assert_roundtrip pp_u u_to_yojson u_of_yojson
@@ -187,6 +203,34 @@ let test_pvar _ctxt =
                (Error "Test_ppx_yojson.pvd")
                (pvd_of_yojson (`List [`String "D"]))
 
+let test_pvar_array _ctxt =
+  assert_roundtrip pp_pv_array pv_array_to_yojson pv_array_of_yojson
+                   `A "[\"A\"]";
+  assert_roundtrip pp_pv_array pv_array_to_yojson pv_array_of_yojson
+                   (`B 42) "[\"B\", 42]";
+  assert_roundtrip pp_pv_array pv_array_to_yojson pv_array_of_yojson
+                   (`C (42, "foo")) "[\"C\", 42, \"foo\"]"
+
+let test_pvar_external _ctxt =
+  assert_roundtrip pp_pv_external pv_external_to_yojson pv_external_of_yojson
+                   `A "\"A\"";
+  assert_roundtrip pp_pv_external pv_external_to_yojson pv_external_of_yojson
+                   (`B 42) "{\"B\": 42}";
+  assert_roundtrip pp_pv_external pv_external_to_yojson pv_external_of_yojson
+                   (`C (42, "foo")) "{\"C\": [42, \"foo\"]}"
+
+let test_pvar_internal _ctxt =
+  assert_roundtrip pp_pv_internal pv_internal_to_yojson pv_internal_of_yojson
+                   `A "{\"type\": \"A\"}"
+
+let test_pvar_adjacent _ctxt =
+  assert_roundtrip pp_pv_adjacent pv_adjacent_to_yojson pv_adjacent_of_yojson
+                   `A "{\"tag\": \"A\"}";
+  assert_roundtrip pp_pv_adjacent pv_adjacent_to_yojson pv_adjacent_of_yojson
+                   (`B 42) "{\"tag\": \"B\", \"contents\": 42}";
+  assert_roundtrip pp_pv_adjacent pv_adjacent_to_yojson pv_adjacent_of_yojson
+                   (`C (42, "foo")) "{\"tag\": \"C\", \"contents\": [42, \"foo\"]}"
+
 let test_var _ctxt =
   assert_roundtrip pp_v v_to_yojson v_of_yojson
                    A "[\"A\"]";
@@ -206,9 +250,45 @@ let test_recvar _ctxt =
   assert_roundtrip pp_rv rv_to_yojson rv_of_yojson
                    (RB 42) "[\"RB\", 42]";
   assert_roundtrip pp_rv rv_to_yojson rv_of_yojson
-                   (RC(42, "foo")) "[\"RC\", 42, \"foo\"]";
+                   (RC (42, "foo")) "[\"RC\", 42, \"foo\"]";
   assert_roundtrip pp_rv rv_to_yojson rv_of_yojson
-                   (RD{z="foo"}) "[\"RD\", {\"z\": \"foo\"}]"
+                   (RD {z = "foo"}) "[\"RD\", {\"z\": \"foo\"}]"
+
+let test_recvar_array _ctxt =
+  assert_roundtrip pp_rv_array rv_array_to_yojson rv_array_of_yojson
+                   RA "[\"RA\"]";
+  assert_roundtrip pp_rv_array rv_array_to_yojson rv_array_of_yojson
+                   (RB 42) "[\"RB\", 42]";
+  assert_roundtrip pp_rv_array rv_array_to_yojson rv_array_of_yojson
+                   (RC (42, "foo")) "[\"RC\", 42, \"foo\"]";
+  assert_roundtrip pp_rv_array rv_array_to_yojson rv_array_of_yojson
+                   (RD {z = "foo"}) "[\"RD\", {\"z\": \"foo\"}]"
+
+let test_recvar_external _ctxt =
+  assert_roundtrip pp_rv_external rv_external_to_yojson rv_external_of_yojson
+                   RA "\"RA\"";
+  assert_roundtrip pp_rv_external rv_external_to_yojson rv_external_of_yojson
+                   (RB 42) "{\"RB\": 42}";
+  assert_roundtrip pp_rv_external rv_external_to_yojson rv_external_of_yojson
+                   (RC (42, "foo")) "{\"RC\": [42, \"foo\"]}";
+  assert_roundtrip pp_rv_external rv_external_to_yojson rv_external_of_yojson
+                   (RD {z = "foo"}) "{\"RD\": {\"z\": \"foo\"}}"
+
+let test_recvar_internal _ctxt =
+  assert_roundtrip pp_rv_internal rv_internal_to_yojson rv_internal_of_yojson
+                   RA "{\"type\": \"RA\"}";
+  assert_roundtrip pp_rv_internal rv_internal_to_yojson rv_internal_of_yojson
+                   (RD {z = "foo"}) "{\"type\": \"RD\", \"z\": \"foo\"}"
+
+let test_recvar_adjacent _ctxt =
+  assert_roundtrip pp_rv_adjacent rv_adjacent_to_yojson rv_adjacent_of_yojson
+                   RA "{\"tag\": \"RA\"}";
+  assert_roundtrip pp_rv_adjacent rv_adjacent_to_yojson rv_adjacent_of_yojson
+                   (RB 42) "{\"tag\": \"RB\", \"contents\": 42}";
+  assert_roundtrip pp_rv_adjacent rv_adjacent_to_yojson rv_adjacent_of_yojson
+                   (RC (42, "foo")) "{\"tag\": \"RC\", \"contents\": [42, \"foo\"]}";
+  assert_roundtrip pp_rv_adjacent rv_adjacent_to_yojson rv_adjacent_of_yojson
+                   (RD {z = "foo"}) "{\"tag\": \"RD\", \"contents\": {\"z\": \"foo\"}}"
 
 type geo = {
   lat : float [@key "Latitude"]  ;
@@ -606,9 +686,17 @@ let suite = "Test ppx_yojson" >::: [
     "test_tuple"     >:: test_tuple;
     "test_ptyp"      >:: test_ptyp;
     "test_pvar"      >:: test_pvar;
+    "test_pvar_array" >:: test_pvar_array;
+    "test_pvar_external" >:: test_pvar_external;
+    "test_pvar_internal" >:: test_pvar_internal;
+    "test_pvar_adjacent" >:: test_pvar_adjacent;
     "test_var"       >:: test_var;
     "test_rec"       >:: test_rec;
     "test_recvar"    >:: test_recvar;
+    "test_recvar_array" >:: test_recvar_array;
+    "test_recvar_external" >:: test_recvar_external;
+    "test_recvar_internal" >:: test_recvar_internal;
+    "test_recvar_adjacent" >:: test_recvar_adjacent;
     "test_key"       >:: test_key;
     "test_id"        >:: test_id;
     "test_custvar"   >:: test_custvar;
