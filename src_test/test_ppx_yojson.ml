@@ -19,6 +19,9 @@ let show_error_or =
   end in
   M.show_error_or
 
+let show_keys keys =
+  Format.asprintf "[%a]" (Format.pp_print_list ~pp_sep:(fun fmt () -> Format.pp_print_string fmt "; ") Format.pp_print_string) keys
+
 let assert_roundtrip pp_obj to_json of_json obj str =
   let json = Yojson.Safe.from_string str in
   let cleanup json = Yojson.Safe.(json |> to_string |> from_string) in
@@ -64,7 +67,7 @@ type pvd = [ pva | pvb | int pvc ]
 type v  = A | B of int | C of int * string
 [@@deriving show, yojson]
 type r  = { x : int; y : string }
-[@@deriving show, yojson]
+[@@deriving show, yojson { meta = true }]
 type rv = RA | RB of int | RC of int * string | RD of { z : string }
 [@@deriving show, yojson]
 
@@ -204,7 +207,8 @@ let test_var _ctxt =
 
 let test_rec _ctxt =
   assert_roundtrip pp_r r_to_yojson r_of_yojson
-                   {x=42; y="foo"} "{\"x\":42,\"y\":\"foo\"}"
+                   {x=42; y="foo"} "{\"x\":42,\"y\":\"foo\"}";
+  assert_equal ~printer:show_keys ["x"; "y"] Yojson_meta_r.keys
 
 let test_recvar _ctxt =
   assert_roundtrip pp_rv rv_to_yojson rv_of_yojson
@@ -220,11 +224,12 @@ type geo = {
   lat : float [@key "Latitude"]  ;
   lon : float [@key "Longitude"] ;
 }
-[@@deriving yojson, show]
+[@@deriving yojson { meta = true }, show]
 let test_key _ctxt =
   assert_roundtrip pp_geo geo_to_yojson geo_of_yojson
                    {lat=35.6895; lon=139.6917}
-                   "{\"Latitude\":35.6895,\"Longitude\":139.6917}"
+                   "{\"Latitude\":35.6895,\"Longitude\":139.6917}";
+  assert_equal ~printer:show_keys ["Latitude"; "Longitude"] Yojson_meta_geo.keys
 
 let test_field_err _ctxt =
   assert_equal ~printer:(show_error_or pp_geo)
