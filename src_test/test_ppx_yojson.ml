@@ -15,7 +15,7 @@ type json =
 
 let show_error_or =
   let module M = struct
-    type 'a error_or = ('a, string) Result.result [@@deriving show]
+    type 'a error_or = ('a, string) result [@@deriving show]
   end in
   M.show_error_or
 
@@ -26,11 +26,11 @@ let assert_roundtrip pp_obj to_json of_json obj str =
   let json = Yojson.Safe.from_string str in
   let cleanup json = Yojson.Safe.(json |> to_string |> from_string) in
   assert_equal ~printer:show_json json (cleanup (to_json obj));
-  assert_equal ~printer:(show_error_or pp_obj) (Result.Ok obj) (of_json json)
+  assert_equal ~printer:(show_error_or pp_obj) (Ok obj) (of_json json)
 
 let assert_failure pp_obj of_json err str =
   let json = Yojson.Safe.from_string str in
-  assert_equal ~printer:(show_error_or pp_obj) (Result.Error err) (of_json json)
+  assert_equal ~printer:(show_error_or pp_obj) (Error err) (of_json json)
 
 type u = unit         [@@deriving show, yojson]
 type i1 = int         [@@deriving show, yojson]
@@ -109,7 +109,7 @@ let test_float _ctxt =
   assert_roundtrip pp_f f_to_yojson f_of_yojson
                    1.0 "1.0";
   assert_equal ~printer:(show_error_or pp_f)
-               (Result.Ok 1.0)
+               (Ok 1.0)
                (f_of_yojson (`Int 1))
 
 let test_bool _ctxt =
@@ -194,7 +194,7 @@ let test_pvar _ctxt =
   assert_roundtrip pp_pvd pvd_to_yojson pvd_of_yojson
                    (`C 1) "[\"C\", 1]";
   assert_equal ~printer:(show_error_or pp_pvd)
-               (Result.Error "Test_ppx_yojson.pvd")
+               (Error "Test_ppx_yojson.pvd")
                (pvd_of_yojson (`List [`String "D"]))
 
 let test_var _ctxt =
@@ -233,7 +233,7 @@ let test_key _ctxt =
 
 let test_field_err _ctxt =
   assert_equal ~printer:(show_error_or pp_geo)
-               (Result.Error "Test_ppx_yojson.geo.lat")
+               (Error "Test_ppx_yojson.geo.lat")
                (geo_of_yojson (`Assoc ["Longitude", (`Float 42.0)]))
 
 type id = Yojson.Safe.t [@@deriving yojson]
@@ -284,9 +284,9 @@ module CustomConversions = struct
 
   module IntMap = Map.Make(struct type t = int let compare = compare end)
   type mapEncoding = (int * string) list [@@deriving yojson]
-  let map_to_yojson m = mapEncoding_to_yojson @@ IntMap.bindings m 
-  let map_of_yojson json = 
-    Result.(match mapEncoding_of_yojson json with
+  let map_to_yojson m = mapEncoding_to_yojson @@ IntMap.bindings m
+  let map_of_yojson json =
+    (match mapEncoding_of_yojson json with
               | Ok lst -> Ok (List.fold_left (fun m (k, v) -> IntMap.add k v m) IntMap.empty lst)
               | Error s -> Error s)
 
@@ -309,7 +309,7 @@ module CustomConversions = struct
     assert_roundtrip pp_crecord crecord_to_yojson crecord_of_yojson
                      IntMap.{ mapping = add 6 "foo" @@ empty }
                      {|{"mapping":[[6,"foo"]]}|}
-  
+
   let suite = "Custom conversion attributes" >:::
     [ "test_record"      >:: test_record
     ; "test_bare"        >:: test_bare ]
@@ -321,7 +321,7 @@ type nostrict = {
 [@@deriving show, yojson { strict = false }]
 let test_nostrict _ctxt =
   assert_equal ~printer:(show_error_or pp_nostrict)
-               (Result.Ok { nostrict_field = 42 })
+               (Ok { nostrict_field = 42 })
                (nostrict_of_yojson (`Assoc ["nostrict_field", (`Int 42);
                                             "some_other_field", (`Int 43)]))
 

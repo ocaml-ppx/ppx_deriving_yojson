@@ -3,7 +3,7 @@
  (public_name ppx_deriving_yojson.runtime)
  (synopsis "Runtime components of [@@deriving yojson]")
  (modules ppx_deriving_yojson_runtime)
- (libraries ppx_deriving.runtime result))
+ (libraries ppx_deriving.runtime))
 
 (library
  (name ppx_deriving_yojson)
