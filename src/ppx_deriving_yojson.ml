@@ -61,11 +61,6 @@ type options = {
   want_exn: bool;
 }
 
-let ebool: _ Ast_pattern.t -> _ Ast_pattern.t =
-  Ast_pattern.map1 ~f:(function
-    | [%expr true] -> true
-    | [%expr false] -> false
-    | _ -> failwith "not bool")
 let args () = Deriving.Args.(empty +> arg "strict" (ebool __) +> arg "meta" (ebool __) +> arg "exn" (ebool __))
 
 let poly_fun names expr =
