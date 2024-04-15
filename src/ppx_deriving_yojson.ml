@@ -47,13 +47,12 @@ let ct_attr_desu = Attribute.declare "deriving.yojson.of_yojson" Attribute.Conte
 
 let attr_default context = Attribute.declare "deriving.yojson.default" context
   Ast_pattern.(single_expr_payload __) (fun e -> e)
-let ct_attr_default = attr_default Attribute.Context.core_type
-let label_attr_default = attr_default Attribute.Context.label_declaration
+let attr_default = (attr_default Attribute.Context.label_declaration, attr_default Attribute.Context.core_type)
 
-let attribute_get2 attr1 x1 attr2 x2 =
-  match Attribute.get attr1 x1, Attribute.get attr2 x2 with
-  | Some _ as y, _ -> y
-  | None, y -> y
+let get_label_attribute (label_attr, ct_attr) label =
+  match Attribute.get label_attr label with
+  | Some _ as v -> v
+  | None -> Attribute.get ct_attr label.pld_type
 
 type options = {
   is_strict: bool;
@@ -297,7 +296,7 @@ let ser_str_of_record ~quoter ~loc varname labels =
       let field  = Exp.field (evar varname) (mknoloc (Lident name)) in
       let result = [%expr [%e str (match Attribute.get label_attr_key label with Some s -> s | None -> name)],
                     [%e ser_expr_of_typ ~quoter @@ type_add_attrs pld_type pld_attributes] [%e field]] in
-      match attribute_get2 ct_attr_default pld_type label_attr_default label with
+      match get_label_attribute attr_default label with
       | None ->
           [%expr [%e result] :: fields]
       | Some default ->
@@ -514,7 +513,7 @@ let desu_str_of_record ~quoter ~loc ~is_strict ~error ~path wrap_record labels =
      Exp.case [%pat? _ :: xs] default_case]
   and thunks =
     labels |> List.map (fun ({ pld_name = { txt = name }; pld_type; _ } as label) ->
-      match attribute_get2 ct_attr_default pld_type label_attr_default label with
+      match get_label_attribute attr_default label with
       | None   -> error (path @ [name])
       | Some default ->
         let default = [%expr ([%e default] : [%t pld_type])] in
