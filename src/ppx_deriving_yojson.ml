@@ -958,10 +958,10 @@ let _deriving: Deriving.t =
 
 (* custom extensions such that "derive"-prefixed also works *)
 let to_derive_extension =
-  Extension.V3.declare "derive.to_yojson" Extension.Context.expression
+  Extension.V3.declare "ppx_deriving_yojson.derive.to_yojson" Extension.Context.expression
     Ast_pattern.(ptyp __) (fun ~ctxt:_ -> ser_core_expr_of_typ)
 let of_derive_extension =
-  Extension.V3.declare "derive.of_yojson" Extension.Context.expression
+  Extension.V3.declare "ppx_deriving_yojson.derive.of_yojson" Extension.Context.expression
     Ast_pattern.(ptyp __) (fun ~ctxt:_ -> desu_core_expr_of_typ)
 let _derive_transformation =
   Driver.register_transformation
