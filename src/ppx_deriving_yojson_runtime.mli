@@ -17,3 +17,12 @@ module Int32 : (module type of Int32)
 module Int64 : (module type of Int64)
 module Nativeint : (module type of Nativeint)
 module Array : (module type of Array)
+module Result : sig
+  type ('a, 'b) t = ('a, 'b) result =
+    | Ok of 'a
+    | Error of 'b
+
+  type nonrec ('a, 'b) result = ('a, 'b) result =
+    | Ok of 'a
+    | Error of 'b
+end
