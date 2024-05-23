@@ -1,5 +1,5 @@
-unreleased
-----------
+3.8.0
+-----
 
   * Port deriver to ppxlib
     (#149)
