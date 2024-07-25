@@ -1,6 +1,10 @@
 unreleased
 ----------
 
+  * Expose Deriving.t values to allow definition of external Deriving aliases
+    (#159)
+    @NathanReb
+
 3.8.0
 -----
 
