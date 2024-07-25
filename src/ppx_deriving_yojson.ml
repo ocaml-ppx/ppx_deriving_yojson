@@ -919,7 +919,7 @@ let make_gen f =
   in
   Deriving.Generator.V2.make (args ()) f'
 
-let _to_deriving: Deriving.t =
+let to_yojson: Deriving.t =
   Deriving.add
     "to_yojson"
     ~str_type_decl:(make_gen (fun ~options ~path (_, type_decls) ->
@@ -931,7 +931,7 @@ let _to_deriving: Deriving.t =
     ~str_type_ext:(make_gen ser_str_of_type_ext)
     ~sig_type_ext:(make_gen ser_sig_of_type_ext)
 
-let _of_deriving: Deriving.t =
+let of_yojson: Deriving.t =
   Deriving.add
     "of_yojson"
     ~str_type_decl:(make_gen (fun ~options ~path (_, type_decls) ->
@@ -944,7 +944,7 @@ let _of_deriving: Deriving.t =
     ~sig_type_ext:(make_gen desu_sig_of_type_ext)
 
 (* Not just alias because yojson also has meta (without its own deriver name) *)
-let _deriving: Deriving.t =
+let yojson: Deriving.t =
   Deriving.add
     "yojson"
     ~str_type_decl:(make_gen (fun ~options ~path (_, type_decls) ->
