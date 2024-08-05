@@ -77,7 +77,7 @@ The following table summarizes the correspondence between OCaml types and JSON v
 | `Yojson.Safe.t`        | any        | Identity transformation          |
 | `unit`                 | Null       |                                  |
 
-Variants (regular and polymorphic) are represented using arrays; the first element is a string with the name of the constructor, the rest are the arguments. Note that the implicit tuple in a polymorphic variant is flattened. For example:
+By default, variants (regular and polymorphic) are represented using arrays; the first element is a string with the name of the constructor, the rest are the arguments. Note that the implicit tuple in a polymorphic variant is flattened. For example:
 
 ``` ocaml
 # type pvs = [ `A | `B of int | `C of int * string ] list [@@deriving yojson];;
@@ -97,7 +97,14 @@ Record variants are represented in the same way as if the nested structure was d
 ["X",{"v":0}]
 ```
 
-Record variants are currently not supported for extensible variant types.
+Alternative representations of variants can be chosen using the option `variants` (i.e. ``[@@deriving yojson { variants = `Adjacent ("tag", "contents") }]``). The following table lists the ones that are supported:
+
+| `type _ =`                | Value            | ``variants = `Array``  | ``variants = `External`` | ``variants = `Internal "type"`` | ``variants = `Adjacent ("tag", "contents")`` | ``variants = `Native`` |
+| ------------------------- | ---------------- | ---------------------- | ------------------------ | ------------------------------- | -------------------------------------------- | ---------------------- |
+| `\| RA`                   | `RA`             | `["RA"]`               | `"RA"`                   | `{"type": "RA"}`                | `{"tag": "RA"}`                              | `<"RA">`               |
+| `\| RB of int`            | `RB 42`          | `["RB", 42]`           | `{"RB": 42}`             | (not supported)                 | `{"tag": "RB", "contents": 42}`              | `<"RB":42>`            |
+| `\| RC of int * string`   | `RC (42, "foo")` | `["RC", 42, "foo"]`    | `{"RC": [42, "foo"]}`    | (not supported)                 | `{"tag": "RC", "contents": [42, "foo"]}`     | `<"RC":[42, "foo"]>`   |
+| `\| RD of { z : string }` | `RD {z = "foo"}` | `["RD", {"z": "foo"}]` | `{"RD": {"z": "foo"}}`   | `{"type": "RD", "z": "foo"}`    | `{"tag": "RD", "contents": {"z": "foo"}}`    | `<"RD":{"z": "foo"}>`  |
 
 By default, objects are deserialized strictly; that is, all keys in the object have to correspond to fields of the record. Passing `strict = false` as an option to the deriver  (i.e. `[@@deriving yojson { strict = false }]`) changes the behavior to ignore any unknown fields.
 

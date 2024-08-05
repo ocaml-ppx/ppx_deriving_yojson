@@ -1,0 +1,70 @@
+
+
+
+
+=======
+  is_strict : bool;
+  want_meta : bool;
+  want_exn : bool;
+  variants : variants;
+}
+
+let default_options = {
+  is_strict = true;
+  want_meta = false;
+  want_exn = false;
+  variants = `Array;
+}
+
+let parse_options options =
+  let get_bool = Ppx_deriving.Arg.(get_expr ~deriver bool) in
+  options |> List.fold_left (fun options (name, expr) ->
+    match name with
+    | "strict" -> {options with is_strict = get_bool expr}
+    | "meta" -> {options with want_meta = get_bool expr}
+    | "exn" -> {options with want_exn = get_bool expr}
+    | "variants" -> {options with variants = Ppx_deriving.Arg.get_expr ~deriver variants_conv expr}
+    | _ -> raise_errorf ~loc:expr.pexp_loc "%s does not support option %s" deriver name
+  ) default_options
+>>>>>>> b25db84 (Support alternative representations of variants)
+
+
+
+
+
+let variants_conv _ loc expr f =
+  match expr with
+  | { pexp_desc = Pexp_variant ("Array", None) } -> f `Array
+  | { pexp_desc = Pexp_variant ("External", None) } -> f `External
+  | { pexp_desc = Pexp_variant ("Internal", Some t_expr) } ->
+    (match Ppx_deriving.Arg.string t_expr with
+    | Ok t -> f (`Internal t)
+    | Error e -> raise (Ppxlib__.Ast_pattern0.Expected (loc, "`Internal _:" ^ e)))
+  | { pexp_desc = Pexp_variant ("Adjacent", Some { pexp_desc = Pexp_tuple [t_expr; c_expr] }) } ->
+    (match Ppx_deriving.Arg.string t_expr, Ppx_deriving.Arg.string c_expr with
+    | Ok t, Ok c -> f (`Adjacent (t, c))
+    | Error e, _ -> Location.Error.raise (Location.Error.make ~loc ~sub:[] ("`Adjacent (_, _):" ^ e))
+    | _, Error e -> Location.Error.raise (Location.Error.make ~loc ~sub:[] ("`Adjacent (_, _):" ^ e)))
+  | { pexp_desc = Pexp_variant ("Native", None) } -> f `Native
+  | _ -> Location.Error.raise (Location.Error.make ~loc ~sub:[] (Printf.sprintf "one of: `Array, `External, `Internal _, `Adjacent (_, _), `Native"))
+
+
+
+
+let variants_conv _ loc expr f =
+  match expr with
+  | { pexp_desc = Pexp_variant ("Array", None) } -> f `Array
+  | { pexp_desc = Pexp_variant ("External", None) } -> f `External
+  | { pexp_desc = Pexp_variant ("Internal", Some t_expr) } ->
+    (match Ppx_deriving.Arg.string t_expr with
+    | Ok t -> f (`Internal t)
+    | Error e -> raise (Ppxlib__.Ast_pattern0.Expected (loc, "`Internal _:" ^ e)))
+  | { pexp_desc = Pexp_variant ("Adjacent", Some { pexp_desc = Pexp_tuple [t_expr; c_expr] }) } ->
+    (match Ppx_deriving.Arg.string t_expr, Ppx_deriving.Arg.string c_expr with
+    | Ok t, Ok c -> f (`Adjacent (t, c))
+    | Error e, _ -> raise (Ppxlib__.Ast_pattern0.Expected (loc, "`Adjacent (_, _):" ^ e))
+    | _, Error e -> raise (Ppxlib__.Ast_pattern0.Expected (loc, "`Adjacent (_, _):" ^ e)))
+  | { pexp_desc = Pexp_variant ("Native", None) } -> f `Native
+  | _ -> raise (Ppxlib__.Ast_pattern0.Expected (loc, Printf.sprintf "one of: `Array, `External, `Internal _, `Adjacent (_, _), `Native"))
+
+
