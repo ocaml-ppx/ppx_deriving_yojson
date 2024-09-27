@@ -148,7 +148,7 @@ and ser_expr_of_only_typ ~quoter typ =
     Exp.function_ cases
   | { ptyp_desc = Ptyp_var name } -> [%expr ([%e evar ("poly_"^name)] : _ -> Yojson.Safe.t)]
   | { ptyp_desc = Ptyp_alias (typ, name) } ->
-    [%expr fun x -> [%e evar ("poly_"^name)] x; [%e ser_expr_of_typ typ] x]
+    [%expr fun x -> [%e evar ("poly_"^name.txt)] x; [%e ser_expr_of_typ typ] x]
   | { ptyp_desc = Ptyp_poly (names, typ) } ->
      poly_fun names (ser_expr_of_typ typ)
   | { ptyp_loc } ->
@@ -279,7 +279,7 @@ and desu_expr_of_only_typ ~quoter ~path typ =
   | { ptyp_desc = Ptyp_var name } ->
     [%expr ([%e evar ("poly_"^name)] : Yojson.Safe.t -> _ error_or)]
   | { ptyp_desc = Ptyp_alias (typ, name) } ->
-    [%expr fun x -> [%e evar ("poly_"^name)] x; [%e desu_expr_of_typ ~path typ] x]
+    [%expr fun x -> [%e evar ("poly_"^name.txt)] x; [%e desu_expr_of_typ ~path typ] x]
   | { ptyp_desc = Ptyp_poly (names, typ) } ->
      poly_fun names (desu_expr_of_typ ~path typ)
   | { ptyp_loc } ->
