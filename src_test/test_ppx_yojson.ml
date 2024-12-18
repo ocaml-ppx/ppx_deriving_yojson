@@ -358,6 +358,8 @@ let test_opentype _ctxt =
   assert_roundtrip pp_ot to_yojson of_yojson
                    (C (Opentype.A 42, 1.2)) "[\"C\", [\"A\", 42], 1.2]"
 
+type paramless_opentype = .. [@@deriving yojson]
+
 
 (* This will fail at type-check if we introduce features that increase
    the default generated signatures. It is representative of user code

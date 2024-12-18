@@ -319,7 +319,6 @@ let ser_str_of_record ~quoter ~loc varname labels =
   in
   [%expr let fields = [] in [%e assoc]]
 
-
 let ser_str_of_type ~options ~path ({ ptype_loc = loc } as type_decl) =
   let quoter = Ppx_deriving.create_quoter () in
   let polymorphize = Ppx_deriving.poly_fun_of_type_decl type_decl in
@@ -348,7 +347,10 @@ let ser_str_of_type ~options ~path ({ ptype_loc = loc } as type_decl) =
       let polymorphize_ser  = Ppx_deriving.poly_arrow_of_type_decl
         (fun var -> [%type: [%t var] -> Yojson.Safe.t]) type_decl
       in
-      let ty = Typ.poly poly_vars (polymorphize_ser [%type: [%t typ] -> Yojson.Safe.t]) in
+      let mono_ty = [%type: [%t typ] -> Yojson.Safe.t] in
+      let ty =
+        Ast_builder.Default.ptyp_poly ~loc poly_vars (polymorphize_ser mono_ty)
+      in
       let default_fun =
         let type_path = String.concat "." (path @ [type_decl.ptype_name.txt]) in
         let e_type_path = Ast_builder.Default.estring ~loc:Location.none type_path in
@@ -567,8 +569,9 @@ let desu_str_of_type ~options ~path ({ ptype_loc = loc } as type_decl) =
       in
       let polymorphize_desu = Ppx_deriving.poly_arrow_of_type_decl
         (fun var -> [%type: Yojson.Safe.t -> [%t error_or var]]) type_decl in
-      let ty = Typ.poly poly_vars
-        (polymorphize_desu [%type: Yojson.Safe.t -> [%t error_or typ]])
+      let mono_ty = [%type: Yojson.Safe.t -> [%t error_or typ]] in
+      let ty =
+        Ast_builder.Default.ptyp_poly ~loc poly_vars (polymorphize_desu mono_ty)
       in
       let default_fun = Exp.function_ [Exp.case [%pat? _] top_error] in
       let poly_fun = polymorphize default_fun in
@@ -716,7 +719,10 @@ let ser_sig_of_type ~options ~path type_decl =
     let polymorphize_ser  = Ppx_deriving.poly_arrow_of_type_decl
       (fun var -> [%type: [%t var] -> Yojson.Safe.t]) type_decl
     in
-    let ty = Typ.poly poly_vars (polymorphize_ser [%type: [%t typ] -> Yojson.Safe.t]) in
+    let mono_ty = [%type: [%t typ] -> Yojson.Safe.t] in
+    let ty =
+      Ast_builder.Default.ptyp_poly ~loc poly_vars (polymorphize_ser mono_ty)
+    in
     let typ = Type.mk ~kind:(Ptype_record
        [Type.field ~mut:Mutable (mknoloc "f") ty]) (mknoloc "t_to_yojson")
     in
@@ -757,8 +763,9 @@ let desu_sig_of_type ~options ~path type_decl =
     let typ = Ppx_deriving.core_type_of_type_decl type_decl in
     let polymorphize_desu = Ppx_deriving.poly_arrow_of_type_decl
       (fun var -> [%type: Yojson.Safe.t -> [%t error_or var]]) type_decl in
-    let ty = Typ.poly poly_vars
-      (polymorphize_desu [%type: Yojson.Safe.t -> [%t error_or typ]])
+    let mono_ty = [%type: Yojson.Safe.t -> [%t error_or typ]] in
+    let ty =
+      Ast_builder.Default.ptyp_poly ~loc poly_vars (polymorphize_desu mono_ty)
     in
     let typ = Type.mk ~kind:(Ptype_record
        [Type.field ~mut:Mutable (mknoloc "f") ty]) (mknoloc "t_of_yojson")
