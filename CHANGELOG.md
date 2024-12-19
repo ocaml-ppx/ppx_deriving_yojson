@@ -1,5 +1,5 @@
-unreleased
-----------
+3.9.1
+-----
 
   * Fix generation of unnecessary `Poly_typ ([], ...)` nodes when deriving
     de/serializer for open types. These are rejected by OCaml 5.3 onward.
