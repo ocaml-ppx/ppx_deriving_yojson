@@ -1,3 +1,13 @@
+unreleased
+----------
+
+  * Bump to ppxlib.0.36.0, 5.2 AST
+    (#160)
+    @patricoferris
+  * Fix more `Poly_typ ([], ...)` nodes generation
+    #160
+    @NathanReb
+
 3.9.1
 -----
 
@@ -5,10 +15,6 @@
     de/serializer for open types. These are rejected by OCaml 5.3 onward.
     (#162)
     @NathanReb
-
-  * Bump to ppxlib.0.36.0, 5.2 AST
-    (#160)
-    @patricoferris
 
 3.9.0
 -----
