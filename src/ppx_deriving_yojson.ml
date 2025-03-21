@@ -148,7 +148,7 @@ and ser_expr_of_only_typ ~quoter typ =
     Exp.function_ cases
   | { ptyp_desc = Ptyp_var name } -> [%expr ([%e evar ("poly_"^name)] : _ -> Yojson.Safe.t)]
   | { ptyp_desc = Ptyp_alias (typ, name) } ->
-    [%expr fun x -> [%e evar ("poly_"^name)] x; [%e ser_expr_of_typ typ] x]
+    [%expr fun x -> [%e evar ("poly_"^name.txt)] x; [%e ser_expr_of_typ typ] x]
   | { ptyp_desc = Ptyp_poly (names, typ) } ->
      poly_fun names (ser_expr_of_typ typ)
   | { ptyp_loc } ->
@@ -279,7 +279,7 @@ and desu_expr_of_only_typ ~quoter ~path typ =
   | { ptyp_desc = Ptyp_var name } ->
     [%expr ([%e evar ("poly_"^name)] : Yojson.Safe.t -> _ error_or)]
   | { ptyp_desc = Ptyp_alias (typ, name) } ->
-    [%expr fun x -> [%e evar ("poly_"^name)] x; [%e desu_expr_of_typ ~path typ] x]
+    [%expr fun x -> [%e evar ("poly_"^name.txt)] x; [%e desu_expr_of_typ ~path typ] x]
   | { ptyp_desc = Ptyp_poly (names, typ) } ->
      poly_fun names (desu_expr_of_typ ~path typ)
   | { ptyp_loc } ->
@@ -415,7 +415,7 @@ let ser_str_of_type ~options ~path ({ ptype_loc = loc } as type_decl) =
     in
     let ty = ser_type_of_decl ~options ~path type_decl in
     let fv = Ppx_deriving.free_vars_in_core_type ty in
-    let poly_type = Typ.force_poly @@ Typ.poly fv @@ ty in
+    let poly_type = Ast_builder.Default.ptyp_poly ~loc fv ty in
     let var_s = Ppx_deriving.mangle_type_decl (`Suffix "to_yojson") type_decl in
     let var = pvar var_s in
     ([],
@@ -629,7 +629,7 @@ let desu_str_of_type ~options ~path ({ ptype_loc = loc } as type_decl) =
     in
     let ty = desu_type_of_decl ~options ~path type_decl in
     let fv = Ppx_deriving.free_vars_in_core_type ty in
-    let poly_type = Typ.force_poly @@ Typ.poly fv @@ ty in
+    let poly_type = Ast_builder.Default.ptyp_poly ~loc fv ty in
     let var_s = Ppx_deriving.mangle_type_decl (`Suffix "of_yojson") type_decl in
     let var = pvar var_s in
     let var_s_exn = var_s ^ "_exn" in

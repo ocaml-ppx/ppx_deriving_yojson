@@ -1,3 +1,13 @@
+unreleased
+----------
+
+  * Bump to ppxlib.0.36.0, 5.2 AST
+    (#160)
+    @patricoferris
+  * Fix more `Poly_typ ([], ...)` nodes generation
+    #160
+    @NathanReb
+
 3.9.1
 -----
 
@@ -18,7 +28,7 @@
 
   * Port deriver to ppxlib
     (#149)
-    Simmo Saan 
+    Simmo Saan
 
 3.7.0
 -----
