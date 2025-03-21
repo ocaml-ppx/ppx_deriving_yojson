@@ -6,6 +6,10 @@
     (#162)
     @NathanReb
 
+  * Bump to ppxlib.0.36.0, 5.2 AST
+    (#160)
+    @patricoferris
+
 3.9.0
 -----
 
@@ -18,7 +22,7 @@
 
   * Port deriver to ppxlib
     (#149)
-    Simmo Saan 
+    Simmo Saan
 
 3.7.0
 -----
