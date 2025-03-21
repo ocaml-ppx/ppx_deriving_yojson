@@ -1,5 +1,5 @@
-unreleased
-----------
+3.10.0
+------
 
   * Bump to ppxlib.0.36.0, 5.2 AST
     (#160)
