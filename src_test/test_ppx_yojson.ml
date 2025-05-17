@@ -512,6 +512,20 @@ let test_recursive_2 _ctxt =
                    recursive2_of_yojson
                    (Rec3 (Rec2 Nil2)) "[\"Rec3\", [\"Rec2\", [\"Nil2\"]]]"
 
+module Recursive3 = struct
+  [@@@ocaml.warning "-30"]
+  type t = Nil | Rec of t'
+  and t' = Nil | Rec of t
+  [@@deriving show, yojson]
+
+  let test _ctxt =
+    assert_roundtrip pp
+      to_yojson
+      of_yojson
+      (Rec (Rec Nil)) "[\"Rec\", [\"Rec\", [\"Nil\"]]]"
+end
+let test_recursive_3 = Recursive3.test
+
 let test_int_redefined ctxt =
   let module M = struct
     type int = Break_things
@@ -604,6 +618,7 @@ let suite = "Test ppx_yojson" >::: [
     "test_opentype"  >:: test_opentype;
     "test_recursive" >:: test_recursive;
     "test_recursive_2" >:: test_recursive_2;
+    "test_recursive_3" >:: test_recursive_3;
     "test_int_redefined" >:: test_int_redefined;
     "test_equality_redefined" >:: test_equality_redefined;
   ]
