@@ -502,6 +502,16 @@ let test_recursive _ctxt =
   assert_roundtrip pp_bar bar_to_yojson bar_of_yojson
                    {lhs="x"; rhs=42} "{\"lhs\":\"x\",\"rhs\":42}"
 
+type recursive2 = Nil2 | Rec3 of recursive2'
+and recursive2' = Nil3 | Rec2 of recursive2
+[@@deriving show, yojson]
+
+let test_recursive_2 _ctxt =
+  assert_roundtrip pp_recursive2
+                   recursive2_to_yojson
+                   recursive2_of_yojson
+                   (Rec3 (Rec2 Nil2)) "[\"Rec3\", [\"Rec2\", [\"Nil2\"]]]"
+
 let test_int_redefined ctxt =
   let module M = struct
     type int = Break_things
@@ -593,6 +603,7 @@ let suite = "Test ppx_yojson" >::: [
     "test_nostrict"  >:: test_nostrict;
     "test_opentype"  >:: test_opentype;
     "test_recursive" >:: test_recursive;
+    "test_recursive_2" >:: test_recursive_2;
     "test_int_redefined" >:: test_int_redefined;
     "test_equality_redefined" >:: test_equality_redefined;
   ]
