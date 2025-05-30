@@ -1,17 +1,7 @@
 open OUnit2
 
-type json =
-  [ `Assoc of (string * json) list
-  | `Bool of bool
-  | `Float of float
-  | `Int of int
-  | `Intlit of string
-  | `List of json list
-  | `Null
-  | `String of string
-  | `Tuple of json list
-  | `Variant of string * json option ]
-  [@@deriving show]
+let show_json = Yojson.Safe.show
+let pp_json = Yojson.Safe.pp
 
 let show_error_or =
   let module M = struct
