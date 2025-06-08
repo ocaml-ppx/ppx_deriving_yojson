@@ -26,7 +26,7 @@ Usage
 
 In order to use _deriving yojson_, require the package `ppx_deriving_yojson`.
 
-If you are using dune, add `ppx_deriving_json` to the `preprocess` entry, and `ppx_deriving_json.runtime` to your requirements, like so:
+If you are using dune, add `ppx_deriving_yojson` to the `preprocess` entry, and `ppx_deriving_yojson.runtime` to your requirements, like so:
 
 ```
 ...
