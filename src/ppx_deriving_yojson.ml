@@ -609,9 +609,18 @@ let desu_str_of_type ~options ~path ({ ptype_loc = loc } as type_decl) =
             Exp.case
               [%pat? `List ((`String [%p pstr name]) ::
                                      [%p plist (List.mapi (fun i _ -> pvar (argn i)) args)])]
-              (desu_fold ~quoter ~loc ~path (fun x -> constr name' x) args)
+              (desu_fold ~quoter ~loc ~path
+                 (fun x ->
+                    (* https://github.com/ocaml-ppx/ppx_deriving_yojson/issues/163 *)
+                    let typ = Ppx_deriving.core_type_of_type_decl type_decl in
+                    Exp.constraint_ (constr name' x) typ)
+                 args)
           | Pcstr_record labels ->
-            let wrap_record r = constr name' [r] in
+            let wrap_record r =
+              (* https://github.com/ocaml-ppx/ppx_deriving_yojson/issues/163 *)
+              let typ = Ppx_deriving.core_type_of_type_decl type_decl in
+              Exp.constraint_ (constr name' [r]) typ
+            in
             let sub =
               desu_str_of_record ~quoter ~loc ~is_strict ~error ~path wrap_record labels in
             let name = match Attribute.get constr_attr_name constr' with Some s -> s | None -> name' in
