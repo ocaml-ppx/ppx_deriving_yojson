@@ -1,3 +1,10 @@
+unreleased
+----------
+
+  * Support alternative representations of variants
+    (#155)
+    Anna Danilkin
+
 3.10.0
 ------
 
